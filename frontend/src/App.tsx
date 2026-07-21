@@ -11,6 +11,7 @@ import { AlbumPage } from './pages/AlbumPage'
 import { AutologinPage } from './pages/AutologinPage'
 import { GuestLoginPage } from './pages/GuestLoginPage'
 import { HomePage } from './pages/HomePage'
+import { LandingPage } from './pages/LandingPage'
 import { RsvpPage } from './pages/RsvpPage'
 import { getToken } from './api'
 import { getInviteCode } from './inviteCode'
@@ -23,7 +24,7 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 function RequireGuest({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useGuestAuth()
   if (!isAuthenticated && !getInviteCode()) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/" replace />
   }
   return children
 }
@@ -33,6 +34,7 @@ export default function App() {
     <GuestAuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<GuestLoginPage />} />
           <Route path="/autologin" element={<AutologinPage />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -43,7 +45,7 @@ export default function App() {
               </RequireGuest>
             }
           >
-            <Route path="/" element={<HomePage />} />
+            <Route path="/home" element={<HomePage />} />
             <Route path="/album" element={<AlbumPage />} />
             <Route path="/rsvp" element={<RsvpPage />} />
             <Route path="/rsvp/:token" element={<RsvpPage />} />

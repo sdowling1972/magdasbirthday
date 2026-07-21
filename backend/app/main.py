@@ -37,14 +37,24 @@ def migrate_invite_codes() -> None:
 
 migrate_invite_codes()
 
-app = FastAPI(title="Magda's Big Birthday Party API", version="0.1.0")
+_docs = None if settings.is_production else "/docs"
+_redoc = None if settings.is_production else "/redoc"
+_openapi = None if settings.is_production else "/openapi.json"
+
+app = FastAPI(
+    title="Magda's Big Birthday Party API",
+    version="0.1.0",
+    docs_url=_docs,
+    redoc_url=_redoc,
+    openapi_url=_openapi,
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(party.router)

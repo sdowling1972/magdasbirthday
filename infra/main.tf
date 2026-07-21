@@ -224,6 +224,7 @@ resource "aws_apprunner_service" "api" {
           DATABASE_URL      = "postgresql+psycopg2://magda:${local.db_password}@${aws_db_instance.main.address}:5432/magdasbirthday"
           ADMIN_PASSWORD    = var.admin_password
           SECRET_KEY        = random_password.secret_key.result
+          ENVIRONMENT       = "production"
           CORS_ORIGINS      = "https://${var.domain_name},https://www.${var.domain_name}"
           S3_BUCKET         = aws_s3_bucket.photos.bucket
           S3_PREFIX         = "photos/"
@@ -312,8 +313,11 @@ resource "aws_cloudfront_distribution" "site" {
     compress               = true
     forwarded_values {
       query_string = true
-      headers      = ["Authorization", "Content-Type", "X-Invite-Code", "Origin", "Accept"]
-      cookies { forward = "none" }
+      headers      = ["Authorization", "Content-Type", "Origin", "Accept"]
+      cookies {
+        forward           = "whitelist"
+        whitelisted_names = ["magda_guest", "magda_admin"]
+      }
     }
     min_ttl     = 0
     default_ttl = 0

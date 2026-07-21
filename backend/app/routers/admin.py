@@ -1,12 +1,14 @@
 from uuid import UUID
+import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, verify_admin_token
 from app.config import settings
 from app.database import get_db
 from app.models import Guest, RsvpStatus
+from app.rate_limit import client_ip, limiter
 from app.schemas import (
     AdminLogin,
     DashboardStats,
@@ -28,15 +30,30 @@ from app.services import (
     serialize_invite,
     update_invite,
 )
+from app.sessions import clear_admin_session, set_admin_session
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 @router.post("/login", response_model=TokenOut)
-def login(payload: AdminLogin) -> TokenOut:
-    if payload.password != settings.admin_password:
+def login(payload: AdminLogin, request: Request, response: Response) -> TokenOut:
+    limiter.hit(f"admin-login:{client_ip(request)}", limit=5, window_seconds=60)
+    expected = settings.admin_password
+    provided = payload.password
+    try:
+        valid = secrets.compare_digest(provided, expected)
+    except (TypeError, ValueError):
+        valid = False
+    if not valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
-    return TokenOut(access_token=create_access_token())
+    token = create_access_token()
+    set_admin_session(response, token)
+    return TokenOut(access_token=token)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(response: Response) -> None:
+    clear_admin_session(response)
 
 
 @router.get("/stats", response_model=DashboardStats)

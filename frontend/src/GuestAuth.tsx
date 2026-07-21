@@ -31,6 +31,7 @@ export function GuestAuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
+    void api.logoutGuest().catch(() => undefined)
     clearInviteCode()
     setCode(null)
     setInvite(null)

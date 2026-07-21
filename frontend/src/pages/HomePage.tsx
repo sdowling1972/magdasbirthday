@@ -41,9 +41,6 @@ export function HomePage() {
             <Link to="/album" className="btn btn-blush">
               Browse the album
             </Link>
-            <Link to="/admin" className="btn btn-secondary" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.35)' }}>
-              Host tools
-            </Link>
           </div>
         </div>
         <div className="hero-portrait">

@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import RsvpStatus
+from app.invite_codes import require_invite_code
+from app.models import Invite, RsvpStatus
 from app.schemas import GuestOut, InvitePublic, PartyInfo
-from app.services import get_invite_by_token
 
 router = APIRouter(prefix="/api/rsvp", tags=["rsvp"])
 
@@ -25,30 +25,31 @@ class RsvpPayload(BaseModel):
     guests: list[GuestRsvpItem] = Field(min_length=1)
 
 
-@router.get("/{token}", response_model=InvitePublic)
-def get_rsvp_page(token: str, db: Session = Depends(get_db)) -> InvitePublic:
-    invite = get_invite_by_token(db, token)
-    if not invite:
-        raise HTTPException(status_code=404, detail="Invite not found")
+def _party() -> PartyInfo:
+    return PartyInfo(
+        name=settings.party_name,
+        date=settings.party_date,
+        location=settings.party_location,
+        description=settings.party_description,
+    )
+
+
+@router.get("", response_model=InvitePublic)
+def get_rsvp(invite: Invite = Depends(require_invite_code)) -> InvitePublic:
     return InvitePublic(
         household_name=invite.household_name,
         max_guests=invite.max_guests,
         guests=invite.guests,
-        party=PartyInfo(
-            name=settings.party_name,
-            date=settings.party_date,
-            location=settings.party_location,
-            description=settings.party_description,
-        ),
+        party=_party(),
     )
 
 
-@router.put("/{token}", response_model=list[GuestOut])
-def submit_rsvp(token: str, payload: RsvpPayload, db: Session = Depends(get_db)) -> list[GuestOut]:
-    invite = get_invite_by_token(db, token)
-    if not invite:
-        raise HTTPException(status_code=404, detail="Invite not found")
-
+@router.put("", response_model=list[GuestOut])
+def submit_rsvp(
+    payload: RsvpPayload,
+    invite: Invite = Depends(require_invite_code),
+    db: Session = Depends(get_db),
+) -> list[GuestOut]:
     guest_map = {g.id: g for g in invite.guests}
     now = datetime.now(timezone.utc)
 
@@ -64,6 +65,5 @@ def submit_rsvp(token: str, payload: RsvpPayload, db: Session = Depends(get_db))
         guest.rsvp_at = now
 
     db.commit()
-    invite = get_invite_by_token(db, token)
-    assert invite is not None
+    db.refresh(invite)
     return invite.guests

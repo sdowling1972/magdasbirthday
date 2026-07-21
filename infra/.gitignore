@@ -6,3 +6,7 @@ terraform.tfvars
 tfplan
 outputs.json
 *.auto.tfvars
+.admin_password
+.deploy-secrets
+.acm_cert_arn
+.acm_validation.json

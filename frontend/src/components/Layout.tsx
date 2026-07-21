@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { clearToken } from '../api'
+import { api, clearToken } from '../api'
 import { useGuestAuth } from '../GuestAuth'
 
 export function PublicLayout() {
@@ -8,13 +8,13 @@ export function PublicLayout() {
 
   function signOut() {
     logout()
-    navigate('/login', { replace: true })
+    navigate('/', { replace: true })
   }
 
   return (
     <div className="site-shell">
       <header className="site-header">
-        <Link to="/" className="brand">
+        <Link to="/home" className="brand">
           Magda<span>'s</span> Big Birthday
         </Link>
         <nav className="nav-links">
@@ -33,7 +33,12 @@ export function PublicLayout() {
 export function AdminLayout() {
   const navigate = useNavigate()
 
-  function logout() {
+  async function logout() {
+    try {
+      await api.logoutAdmin()
+    } catch {
+      /* ignore */
+    }
     clearToken()
     navigate('/admin/login')
   }

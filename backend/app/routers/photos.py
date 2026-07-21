@@ -1,20 +1,26 @@
 import uuid
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth import verify_admin_token
+from app.auth import ALGORITHM, verify_admin_token
+from app.config import settings
 from app.database import get_db
-from app.invite_codes import require_invite_code
+from app.invite_codes import require_invite_code, resolve_invite_code
 from app.models import Invite, Photo, PhotoStatus
+from app.rate_limit import client_ip, limiter
 from app.schemas import PhotoOut, PhotoStatusUpdate
 from app.services import get_invite_by_token
+from app.sessions import ADMIN_COOKIE
 from app.storage import get_storage
 
 router = APIRouter(prefix="/api/photos", tags=["photos"])
+security = HTTPBearer(auto_error=False)
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_BYTES = 15 * 1024 * 1024
@@ -39,17 +45,27 @@ def serialize_photo(photo: Photo) -> PhotoOut:
     )
 
 
-@router.post("/rsvp/{token}", response_model=PhotoOut, status_code=status.HTTP_201_CREATED)
+def _is_admin(request: Request, credentials: HTTPAuthorizationCredentials | None) -> bool:
+    token = credentials.credentials if credentials else request.cookies.get(ADMIN_COOKIE)
+    if not token:
+        return False
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+        return payload.get("sub") == "admin"
+    except JWTError:
+        return False
+
+
+@router.post("/mine", response_model=PhotoOut, status_code=status.HTTP_201_CREATED)
 async def upload_photo(
-    token: str,
+    request: Request,
     uploader_name: str = Form(...),
     caption: str | None = Form(None),
     file: UploadFile = File(...),
+    invite: Invite = Depends(require_invite_code),
     db: Session = Depends(get_db),
 ) -> PhotoOut:
-    invite = get_invite_by_token(db, token)
-    if not invite:
-        raise HTTPException(status_code=404, detail="Invite not found")
+    limiter.hit(f"photo-upload:{invite.id}:{client_ip(request)}", limit=30, window_seconds=3600)
 
     content_type = file.content_type or "application/octet-stream"
     if content_type not in ALLOWED_TYPES:
@@ -83,11 +99,11 @@ async def upload_photo(
     return serialize_photo(photo)
 
 
-@router.get("/rsvp/{token}", response_model=list[PhotoOut])
-def list_invite_photos(token: str, db: Session = Depends(get_db)) -> list[PhotoOut]:
-    invite = get_invite_by_token(db, token)
-    if not invite:
-        raise HTTPException(status_code=404, detail="Invite not found")
+@router.get("/mine", response_model=list[PhotoOut])
+def list_invite_photos(
+    invite: Invite = Depends(require_invite_code),
+    db: Session = Depends(get_db),
+) -> list[PhotoOut]:
     photos = db.scalars(
         select(Photo).where(Photo.invite_id == invite.id).order_by(Photo.created_at.desc())
     ).all()
@@ -149,14 +165,40 @@ def delete_photo(
 
 
 @router.get("/files/{filename}")
-def serve_file(filename: str, db: Session = Depends(get_db)) -> Response:
+def serve_file(
+    filename: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> Response:
     if "/" in filename or "\\" in filename or filename.startswith("."):
         raise HTTPException(status_code=400, detail="Invalid filename")
+
+    photo = db.scalar(select(Photo).where(Photo.filename == filename))
+    if not photo:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if _is_admin(request, credentials):
+        allowed = True
+    else:
+        code = resolve_invite_code(request)
+        if not code:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        invite = get_invite_by_token(db, code)
+        if not invite:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        # Guests may view approved album photos, or any photo from their own invite
+        allowed = photo.status == PhotoStatus.approved or photo.invite_id == invite.id
+
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+
     opened = get_storage().open(filename)
     if not opened:
         raise HTTPException(status_code=404, detail="File not found")
     data, content_type = opened
-    photo = db.scalar(select(Photo).where(Photo.filename == filename))
-    if photo:
-        content_type = photo.content_type
-    return Response(content=data, media_type=content_type)
+    return Response(
+        content=data,
+        media_type=photo.content_type or content_type,
+        headers={"Cache-Control": "private, max-age=3600"},
+    )

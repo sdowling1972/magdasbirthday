@@ -9,7 +9,7 @@ import type {
   PhotoStatus,
   Guest,
 } from './types'
-import { getInviteCode, clearInviteCode } from './inviteCode'
+import { clearInviteCode } from './inviteCode'
 
 const ADMIN_TOKEN_KEY = 'magda_admin_token'
 
@@ -27,6 +27,7 @@ export function clearToken() {
 
 type RequestOptions = RequestInit & {
   admin?: boolean
+  /** Guest APIs rely on the HttpOnly session cookie from /api/auth/login. */
   invite?: boolean
 }
 
@@ -40,12 +41,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const token = getToken()
     if (token) headers.set('Authorization', `Bearer ${token}`)
   }
-  if (invite) {
-    const code = getInviteCode()
-    if (code) headers.set('X-Invite-Code', code)
-  }
 
-  const res = await fetch(path, { ...init, headers })
+  const res = await fetch(path, {
+    ...init,
+    headers,
+    credentials: 'include',
+  })
   if (res.status === 401 && admin) {
     clearToken()
   }
@@ -57,11 +58,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     try {
       const data = await res.json()
       detail = data.detail || detail
-      if (Array.isArray(detail)) {
-        detail = detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join(', ')
-      }
     } catch {
       /* ignore */
+    }
+    if (Array.isArray(detail)) {
+      detail = detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join(', ')
     }
     throw new Error(typeof detail === 'string' ? detail : 'Request failed')
   }
@@ -78,11 +79,15 @@ export const api = {
       body: JSON.stringify({ code }),
     }),
 
+  logoutGuest: () => request<void>('/api/auth/logout', { method: 'POST' }),
+
   login: (password: string) =>
     request<{ access_token: string }>('/api/admin/login', {
       method: 'POST',
       body: JSON.stringify({ password }),
     }),
+
+  logoutAdmin: () => request<void>('/api/admin/logout', { method: 'POST', admin: true }),
 
   getStats: () => request<DashboardStats>('/api/admin/stats', { admin: true }),
 
@@ -113,10 +118,9 @@ export const api = {
   removeGuest: (inviteId: string, guestId: string) =>
     request<void>(`/api/admin/invites/${inviteId}/guests/${guestId}`, { method: 'DELETE', admin: true }),
 
-  getRsvp: (token: string) => request<InvitePublic>(`/api/rsvp/${token}`),
+  getRsvp: () => request<InvitePublic>('/api/rsvp', { invite: true }),
 
   submitRsvp: (
-    token: string,
     guests: Array<{
       guest_id: string
       rsvp_status: 'attending' | 'declined'
@@ -124,15 +128,16 @@ export const api = {
       message?: string | null
     }>,
   ) =>
-    request<Guest[]>(`/api/rsvp/${token}`, {
+    request<Guest[]>('/api/rsvp', {
       method: 'PUT',
       body: JSON.stringify({ guests }),
+      invite: true,
     }),
 
-  listInvitePhotos: (token: string) => request<Photo[]>(`/api/photos/rsvp/${token}`),
+  listInvitePhotos: () => request<Photo[]>('/api/photos/mine', { invite: true }),
 
-  uploadPhoto: (token: string, form: FormData) =>
-    request<Photo>(`/api/photos/rsvp/${token}`, { method: 'POST', body: form }),
+  uploadPhoto: (form: FormData) =>
+    request<Photo>('/api/photos/mine', { method: 'POST', body: form, invite: true }),
 
   getAlbum: () => request<Photo[]>('/api/photos/album', { invite: true }),
 

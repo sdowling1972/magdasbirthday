@@ -1,0 +1,50 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "wait-for-api",
+      "type": "shell",
+      "command": "for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/api/health >/dev/null && exit 0; sleep 0.5; done; echo 'Backend API did not become ready on :8000' >&2; exit 1",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "group": "magda"
+      }
+    },
+    {
+      "label": "frontend:dev",
+      "type": "npm",
+      "script": "dev",
+      "path": "frontend/",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Local:.+"
+        }
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "group": "magda"
+      }
+    },
+    {
+      "label": "frontend:when-api-ready",
+      "dependsOrder": "sequence",
+      "dependsOn": ["wait-for-api", "frontend:dev"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "group": "magda"
+      }
+    }
+  ]
+}

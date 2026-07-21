@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
@@ -35,11 +35,39 @@ export function RsvpPage() {
   const [saving, setSaving] = useState(false)
   const [uploaderName, setUploaderName] = useState('')
   const [caption, setCaption] = useState('')
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const [previews, setPreviews] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState('')
   const [uploadMsg, setUploadMsg] = useState('')
   /** Shared message for the household (applied to primary guest on save). */
   const [householdMessage, setHouseholdMessage] = useState('')
+  const householdMessageRef = useRef(householdMessage)
+  householdMessageRef.current = householdMessage
+  const saveSeq = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    return () => {
+      for (const url of previews) URL.revokeObjectURL(url)
+    }
+  }, [previews])
+
+  function selectFiles(list: FileList | null) {
+    if (!list?.length) return
+    const next = Array.from(list).filter((f) => f.type.startsWith('image/'))
+    for (const url of previews) URL.revokeObjectURL(url)
+    setFiles(next)
+    setPreviews(next.map((f) => URL.createObjectURL(f)))
+    setUploadMsg('')
+  }
+
+  function clearSelectedFiles() {
+    for (const url of previews) URL.revokeObjectURL(url)
+    setFiles([])
+    setPreviews([])
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
 
   useEffect(() => {
     if (!inviteCode || inviteCode.length !== 16) {
@@ -56,8 +84,8 @@ export function RsvpPage() {
           return
         }
         const [data, photoList] = await Promise.all([
-          api.getRsvp(inviteCode),
-          api.listInvitePhotos(inviteCode),
+          api.getRsvp(),
+          api.listInvitePhotos(),
         ])
         if (cancelled) return
         setInvite(data)
@@ -89,88 +117,135 @@ export function RsvpPage() {
     setSaved(false)
   }
 
-  function setAttending(guestId: string, attending: boolean) {
-    updateDraft(guestId, {
-      rsvp_status: attending ? 'attending' : 'declined',
-      dietary_notes: attending ? drafts[guestId]?.dietary_notes || '' : '',
-    })
-  }
-
-  function setAllDeclined() {
-    if (!invite) return
-    setSaved(false)
-    setDrafts((prev) => {
-      const next = { ...prev }
-      for (const g of invite.guests) {
-        next[g.id] = { ...next[g.id], rsvp_status: 'declined', dietary_notes: '' }
-      }
-      return next
-    })
-  }
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!inviteCode || !invite) return
+  async function saveRsvp(nextDrafts: Record<string, Draft>, currentInvite: InvitePublic) {
+    if (!inviteCode) return
+    const seq = ++saveSeq.current
     setSaving(true)
     setError('')
+    setSaved(false)
     try {
-      const isSingle = invite.guests.length === 1
-      if (isSingle) {
-        const g = invite.guests[0]
-        const d = drafts[g.id]
-        if (d.rsvp_status === 'pending') {
-          throw new Error('Please choose whether you will attend')
-        }
-      } else {
-        const anyDecided = invite.guests.some((g) => drafts[g.id]?.rsvp_status !== 'pending')
-        if (!anyDecided) {
-          throw new Error('Select who is attending, or choose that no one can make it')
-        }
-      }
-
-      const primaryId = (invite.guests.find((g) => g.is_primary) || invite.guests[0]).id
-      const payload = invite.guests.map((g) => {
-        const d = drafts[g.id]
-        // Unchecked people on a multi-guest invite count as declined once any choice is made
+      const primaryId = (currentInvite.guests.find((g) => g.is_primary) || currentInvite.guests[0]).id
+      const payload = currentInvite.guests.map((g) => {
+        const d = nextDrafts[g.id]
         const status: 'attending' | 'declined' =
           d.rsvp_status === 'attending' ? 'attending' : 'declined'
         return {
           guest_id: g.id,
           rsvp_status: status,
           dietary_notes: status === 'attending' ? d.dietary_notes || null : null,
-          message: g.id === primaryId ? householdMessage || null : null,
+          message: g.id === primaryId ? householdMessageRef.current || null : null,
         }
       })
-      const guests = await api.submitRsvp(inviteCode, payload)
-      setInvite({ ...invite, guests })
+      const guests = await api.submitRsvp(payload)
+      if (seq !== saveSeq.current) return
+      setInvite({ ...currentInvite, guests })
       setSaved(true)
     } catch (err) {
+      if (seq !== saveSeq.current) return
       setError(err instanceof Error ? err.message : 'Could not save RSVP')
     } finally {
-      setSaving(false)
+      if (seq === saveSeq.current) setSaving(false)
     }
+  }
+
+  function setAttending(guestId: string, attending: boolean) {
+    if (!invite) return
+    setDrafts((prev) => {
+      const next = {
+        ...prev,
+        [guestId]: {
+          ...prev[guestId],
+          rsvp_status: (attending ? 'attending' : 'declined') as RsvpStatus,
+          dietary_notes: attending ? prev[guestId]?.dietary_notes || '' : '',
+        },
+      }
+      void saveRsvp(next, invite)
+      return next
+    })
+  }
+
+  function setAllDeclined() {
+    if (!invite) return
+    setDrafts((prev) => {
+      const next = { ...prev }
+      for (const g of invite.guests) {
+        next[g.id] = { ...next[g.id], rsvp_status: 'declined', dietary_notes: '' }
+      }
+      void saveRsvp(next, invite)
+      return next
+    })
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!invite) return
+    const anyDecided = invite.guests.some((g) => drafts[g.id]?.rsvp_status !== 'pending')
+    if (!anyDecided) {
+      setError(
+        invite.guests.length === 1
+          ? 'Please choose whether you will attend'
+          : 'Select who is attending, or choose that no one can make it',
+      )
+      return
+    }
+    await saveRsvp(drafts, invite)
   }
 
   async function onUpload(e: FormEvent) {
     e.preventDefault()
-    if (!inviteCode || !file) return
+    if (!inviteCode || files.length === 0) return
     setUploading(true)
     setUploadMsg('')
+    const uploaded: Photo[] = []
+    const failures: string[] = []
     try {
-      const form = new FormData()
-      form.append('file', file)
-      form.append('uploader_name', uploaderName || invite?.household_name || 'Guest')
-      if (caption) form.append('caption', caption)
-      const photo = await api.uploadPhoto(inviteCode, form)
-      setPhotos((prev) => [photo, ...prev])
-      setFile(null)
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        setUploadProgress(`Uploading ${i + 1} of ${files.length}…`)
+        try {
+          const form = new FormData()
+          form.append('file', file)
+          form.append('uploader_name', uploaderName || invite?.household_name || 'Guest')
+          if (caption) form.append('caption', caption)
+          const photo = await api.uploadPhoto(form)
+          uploaded.push(photo)
+        } catch (err) {
+          failures.push(file.name)
+          console.error(err)
+        }
+      }
+      if (uploaded.length) {
+        setPhotos((prev) => [...uploaded, ...prev])
+      }
+      clearSelectedFiles()
       setCaption('')
-      setUploadMsg('Photo uploaded — it will appear in the album after approval.')
-    } catch (err) {
-      setUploadMsg(err instanceof Error ? err.message : 'Upload failed')
+      if (failures.length && uploaded.length) {
+        setUploadMsg(`Uploaded ${uploaded.length}. Failed: ${failures.join(', ')}`)
+      } else if (failures.length) {
+        setUploadMsg(`Upload failed: ${failures.join(', ')}`)
+      } else {
+        setUploadMsg(
+          uploaded.length === 1
+            ? 'Photo uploaded — it will appear in the album after approval.'
+            : `${uploaded.length} photos uploaded — they will appear in the album after approval.`,
+        )
+      }
     } finally {
+      setUploadProgress('')
       setUploading(false)
     }
+  }
+
+  function statusLabel(status: string) {
+    if (status === 'approved') return 'Approved'
+    if (status === 'rejected') return 'Not approved'
+    return 'Pending review'
+  }
+
+  function statusBadgeClass(status: string) {
+    if (status === 'approved') return 'badge badge-ok'
+    if (status === 'rejected') return 'badge badge-danger'
+    return 'badge badge-warn'
   }
 
   if (error && !invite) {
@@ -217,6 +292,7 @@ export function RsvpPage() {
                 type="button"
                 className={`choice attending ${singleDraft.rsvp_status === 'attending' ? 'active' : ''}`}
                 onClick={() => setAttending(single.id, true)}
+                disabled={saving}
               >
                 Joyfully attending
               </button>
@@ -224,6 +300,7 @@ export function RsvpPage() {
                 type="button"
                 className={`choice declined ${singleDraft.rsvp_status === 'declined' ? 'active' : ''}`}
                 onClick={() => setAttending(single.id, false)}
+                disabled={saving}
               >
                 Regretfully decline
               </button>
@@ -242,7 +319,7 @@ export function RsvpPage() {
         ) : (
           <div className="stack">
             <p className="muted" style={{ margin: 0 }}>
-              Select everyone from this invite who will be attending.
+              Select everyone from this invite who will be attending. Changes save automatically.
             </p>
             <div className="attendee-checklist">
               {invite.guests.map((g) => {
@@ -255,6 +332,7 @@ export function RsvpPage() {
                       type="checkbox"
                       checked={checked}
                       onChange={(e) => setAttending(g.id, e.target.checked)}
+                      disabled={saving}
                     />
                     <span>{g.name}</span>
                   </label>
@@ -265,6 +343,7 @@ export function RsvpPage() {
               type="button"
               className={`choice declined ${allDeclined ? 'active' : ''}`}
               onClick={setAllDeclined}
+              disabled={saving}
               style={{ alignSelf: 'start' }}
             >
               No one from this invite can attend
@@ -303,53 +382,91 @@ export function RsvpPage() {
         </div>
 
         {error && <p className="error">{error}</p>}
-        {saved && <p className="success">RSVP saved — thank you!</p>}
+        {saving && <p className="muted">Saving…</p>}
+        {!saving && saved && <p className="success">RSVP saved — thank you!</p>}
         <button className="btn btn-primary" type="submit" disabled={saving}>
-          {saving ? 'Saving…' : 'Save RSVP'}
+          {saving ? 'Saving…' : 'Save notes & message'}
         </button>
       </form>
 
       <form className="panel form-grid" onSubmit={onUpload}>
-        <h2 style={{ fontSize: '1.8rem', margin: 0 }}>Share a photo of Magda</h2>
+        <h2 style={{ fontSize: '1.8rem', margin: 0 }}>Share photos of Magda</h2>
         <p className="muted" style={{ margin: 0 }}>
-          Upload pictures for the party slideshow. Approved photos also appear in the public album.
+          Upload one or more pictures for the party slideshow. Approved photos also appear in the public album.
         </p>
         <div className="form-row">
           <label htmlFor="uploader">Your name</label>
           <input id="uploader" value={uploaderName} onChange={(e) => setUploaderName(e.target.value)} required />
         </div>
         <div className="form-row">
-          <label htmlFor="caption">Caption</label>
+          <label htmlFor="caption">Caption (optional, applied to this batch)</label>
           <input id="caption" value={caption} onChange={(e) => setCaption(e.target.value)} />
         </div>
         <div className="form-row">
-          <label htmlFor="file">Photo</label>
+          <label htmlFor="file">Photos</label>
           <input
             id="file"
+            ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp,image/gif"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-            required
+            multiple
+            onChange={(e) => selectFiles(e.target.files)}
           />
         </div>
-        {uploadMsg && (
-          <p className={uploadMsg.includes('failed') || uploadMsg.includes('Only') ? 'error' : 'success'}>{uploadMsg}</p>
+
+        {previews.length > 0 && (
+          <div>
+            <p className="muted" style={{ margin: '0 0 0.75rem' }}>
+              Ready to upload ({files.length})
+            </p>
+            <div className="photo-grid">
+              {previews.map((src, i) => (
+                <div key={src} className="photo-tile photo-tile-preview">
+                  <img src={src} alt={files[i]?.name || 'Selected photo'} />
+                  <div className="photo-meta">
+                    <div className="photo-filename">{files[i]?.name}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
-        <button className="btn btn-blush" type="submit" disabled={uploading || !file}>
-          {uploading ? 'Uploading…' : 'Upload photo'}
-        </button>
+
+        {uploadProgress && <p className="muted">{uploadProgress}</p>}
+        {uploadMsg && (
+          <p className={uploadMsg.includes('failed') || uploadMsg.includes('Failed') || uploadMsg.includes('Only') ? 'error' : 'success'}>
+            {uploadMsg}
+          </p>
+        )}
+        <div className="inline-actions">
+          <button className="btn btn-blush" type="submit" disabled={uploading || files.length === 0}>
+            {uploading
+              ? uploadProgress || 'Uploading…'
+              : files.length > 1
+                ? `Upload ${files.length} photos`
+                : 'Upload photo'}
+          </button>
+          {files.length > 0 && !uploading && (
+            <button type="button" className="btn btn-secondary" onClick={clearSelectedFiles}>
+              Clear
+            </button>
+          )}
+        </div>
       </form>
 
       {photos.length > 0 && (
         <div>
-          <h2 style={{ fontSize: '1.6rem', marginBottom: '1rem' }}>Your uploads</h2>
+          <h2 style={{ fontSize: '1.6rem', marginBottom: '0.35rem' }}>Your uploads</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Each photo shows its review status.
+          </p>
           <div className="photo-grid">
             {photos.map((p) => (
               <div key={p.id} className="photo-tile">
                 <img src={p.url || ''} alt={p.caption || 'Upload'} />
                 <div className="photo-meta">
-                  <div>{p.status}</div>
-                  {p.caption && <div>{p.caption}</div>}
+                  <span className={statusBadgeClass(p.status)}>{statusLabel(p.status)}</span>
+                  {p.caption && <div style={{ marginTop: '0.35rem' }}>{p.caption}</div>}
                 </div>
               </div>
             ))}

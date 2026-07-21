@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useGuestAuth } from '../GuestAuth'
 import { formatInviteCode, getInviteCode, normalizeInviteCode } from '../inviteCode'
 
@@ -21,7 +21,7 @@ export function GuestLoginPage() {
   }, [])
 
   if (isAuthenticated || getInviteCode()) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/home" replace />
   }
 
   function updatePart(index: number, value: string) {
@@ -66,7 +66,7 @@ export function GuestLoginPage() {
     setLoading(true)
     try {
       await login(code)
-      navigate('/', { replace: true })
+      navigate('/home', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid invite code')
     } finally {
@@ -109,9 +109,6 @@ export function GuestLoginPage() {
             {loading ? 'Checking…' : 'Continue'}
           </button>
         </form>
-        <p className="muted" style={{ marginBottom: 0, marginTop: '1.25rem', fontSize: '0.85rem' }}>
-          Host? <Link to="/admin/login">Sign in to admin</Link>
-        </p>
       </div>
     </div>
   )

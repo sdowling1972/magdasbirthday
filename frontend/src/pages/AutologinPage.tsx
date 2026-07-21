@@ -19,7 +19,7 @@ export function AutologinPage() {
       }
       try {
         await login(key)
-        if (!cancelled) navigate('/', { replace: true })
+        if (!cancelled) navigate('/home', { replace: true })
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Invalid invite code')
       }
