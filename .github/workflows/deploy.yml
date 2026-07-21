@@ -1,0 +1,74 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT: magdasbirthday
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push API image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$ECR_REGISTRY/$PROJECT:latest"
+          docker build -t "$IMAGE" backend
+          docker push "$IMAGE"
+
+      - name: Deploy App Runner
+        run: |
+          ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$PROJECT'].ServiceArn" --output text)
+          if [ -n "$ARN" ] && [ "$ARN" != "None" ]; then
+            aws apprunner start-deployment --service-arn "$ARN"
+          else
+            echo "App Runner service not found yet"
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Sync frontend to S3
+        run: |
+          BUCKET=$(aws s3api list-buckets --query "Buckets[?starts_with(Name, '${PROJECT}-frontend-')].Name | [0]" --output text)
+          aws s3 sync frontend/dist "s3://$BUCKET" --delete
+          echo "BUCKET=$BUCKET" >> "$GITHUB_ENV"
+
+      - name: Invalidate CloudFront
+        run: |
+          DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='$PROJECT'].Id | [0]" --output text)
+          if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
+            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"
+          fi

@@ -1,20 +1,18 @@
 import uuid
-from pathlib import Path
 from uuid import UUID
 
-import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import verify_admin_token
-from app.config import settings
 from app.database import get_db
 from app.invite_codes import require_invite_code
 from app.models import Invite, Photo, PhotoStatus
 from app.schemas import PhotoOut, PhotoStatusUpdate
 from app.services import get_invite_by_token
+from app.storage import get_storage
 
 router = APIRouter(prefix="/api/photos", tags=["photos"])
 
@@ -22,16 +20,8 @@ ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_BYTES = 15 * 1024 * 1024
 
 
-def upload_root() -> Path:
-    path = Path(settings.upload_dir)
-    if not path.is_absolute():
-        path = Path(__file__).resolve().parents[2] / path
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
 def photo_url(photo: Photo) -> str:
-    return f"/api/photos/files/{photo.filename}"
+    return get_storage().public_url(photo.filename)
 
 
 def serialize_photo(photo: Photo) -> PhotoOut:
@@ -76,9 +66,7 @@ async def upload_photo(
         "image/gif": ".gif",
     }[content_type]
     stored_name = f"{uuid.uuid4().hex}{ext}"
-    dest = upload_root() / stored_name
-    async with aiofiles.open(dest, "wb") as out:
-        await out.write(data)
+    get_storage().save(stored_name, data, content_type)
 
     photo = Photo(
         invite_id=invite.id,
@@ -155,19 +143,20 @@ def delete_photo(
     photo = db.get(Photo, photo_id)
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
-    path = upload_root() / photo.filename
-    if path.exists():
-        path.unlink()
+    get_storage().delete(photo.filename)
     db.delete(photo)
     db.commit()
 
 
 @router.get("/files/{filename}")
-def serve_file(filename: str) -> FileResponse:
-    # Prevent path traversal
+def serve_file(filename: str, db: Session = Depends(get_db)) -> Response:
     if "/" in filename or "\\" in filename or filename.startswith("."):
         raise HTTPException(status_code=400, detail="Invalid filename")
-    path = upload_root() / filename
-    if not path.exists():
+    opened = get_storage().open(filename)
+    if not opened:
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path)
+    data, content_type = opened
+    photo = db.scalar(select(Photo).where(Photo.filename == filename))
+    if photo:
+        content_type = photo.content_type
+    return Response(content=data, media_type=content_type)

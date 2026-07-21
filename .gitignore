@@ -4,6 +4,10 @@ backend/.venv/
 backend/uploads/
 frontend/node_modules/
 frontend/dist/
+infra/.terraform/
+infra/*.tfstate*
+infra/outputs.json
+infra/terraform.tfvars
 *.pyc
 __pycache__/
 .pytest_cache/

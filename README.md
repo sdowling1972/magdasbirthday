@@ -7,8 +7,9 @@ React + FastAPI + PostgreSQL app for organizing Magda's birthday: invite managem
 - **Frontend:** React (Vite + TypeScript)
 - **Backend:** FastAPI + SQLAlchemy
 - **Database:** PostgreSQL
+- **Production:** AWS (S3 + CloudFront + App Runner + RDS) with Cloudflare DNS
 
-## Quick start
+## Local development
 
 ### 1. Database
 
@@ -17,7 +18,7 @@ React + FastAPI + PostgreSQL app for organizing Magda's birthday: invite managem
 docker compose up -d
 # then set DATABASE_URL=postgresql+psycopg2://magda:magda@localhost:5432/magdasbirthday
 
-# Option B: local Postgres (already used if you have Homebrew Postgres)
+# Option B: local Postgres
 createdb magdasbirthday
 ```
 
@@ -28,7 +29,7 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # adjust DATABASE_URL / party details / ADMIN_PASSWORD
+cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -53,16 +54,45 @@ Open http://localhost:5173
 
 Guests must enter their 16-letter invite code (shown as `AAAA-BBBB-CCCC-DDDD`) before browsing. Admin invite links use `/autologin?key=...`.
 
-Default admin password: `magda-admin` (change in `backend/.env`).
+Default local admin password: `magda-admin` (change in `backend/.env`).
 
-## Features
+## Production deploy (AWS)
 
-- **Admin dashboard** — invite / RSVP / photo counts
-- **Invite management** — households with multiple guests on one invite; unique RSVP link per invite
-- **Guest RSVP page** — per-person attending/declined, dietary notes, message
-- **Photo uploads** — guests upload Magda photos from their RSVP page
-- **Moderation** — approve/reject photos for the public album (and future slideshow)
+### One-time bootstrap
+
+Requires AWS credentials with admin-ish rights, Docker, Terraform, and Node.
+
+```bash
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_REGION=us-east-1
+export ADMIN_PASSWORD='choose-a-strong-password'
+
+chmod +x scripts/bootstrap-aws.sh
+./scripts/bootstrap-aws.sh
+```
+
+Then in Cloudflare DNS for `magdas-big-bday.com` (proxied):
+
+- `CNAME` `@` → CloudFront domain printed by the script  
+- `CNAME` `www` → same CloudFront domain  
+- SSL/TLS mode: **Full**
+
+Add GitHub Actions secrets from the script output:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+### Ongoing updates
+
+```bash
+git push origin master
+```
+
+That triggers `.github/workflows/deploy.yml`: builds the API image, deploys App Runner, builds the frontend, syncs S3, and invalidates CloudFront.
+
+You can also run **Actions → Deploy → Run workflow** in GitHub.
 
 ## Party details
 
-Edit `PARTY_NAME`, `PARTY_DATE`, `PARTY_LOCATION`, and `PARTY_DESCRIPTION` in `backend/.env`.
+Edit `PARTY_NAME`, `PARTY_DATE`, `PARTY_LOCATION`, and `PARTY_DESCRIPTION` in `backend/.env` locally, or App Runner env vars / Terraform in production.

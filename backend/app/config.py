@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     party_description: str = "Join us to celebrate Magda!"
     access_token_expire_minutes: int = 60 * 24
 
+    # When set, photos are stored in S3 instead of local disk
+    s3_bucket: str = ""
+    s3_prefix: str = "photos/"
+    aws_region: str = "us-east-1"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

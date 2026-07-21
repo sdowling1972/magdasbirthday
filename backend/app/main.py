@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
@@ -9,12 +7,6 @@ from app.database import Base, SessionLocal, engine
 from app.invite_codes import CODE_LENGTH, generate_invite_code, normalize_invite_code
 from app.models import Invite
 from app.routers import admin, auth, party, photos, rsvp
-
-# Ensure upload directory exists
-upload_path = Path(settings.upload_dir)
-if not upload_path.is_absolute():
-    upload_path = Path(__file__).resolve().parent.parent / upload_path
-upload_path.mkdir(parents=True, exist_ok=True)
 
 Base.metadata.create_all(bind=engine)
 
@@ -60,3 +52,8 @@ app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(rsvp.router)
 app.include_router(photos.router)
+
+
+@app.get("/")
+def root() -> dict[str, str]:
+    return {"status": "ok", "service": "magdas-big-birthday-api"}
