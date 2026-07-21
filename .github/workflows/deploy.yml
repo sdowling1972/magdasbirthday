@@ -62,7 +62,8 @@ jobs:
 
       - name: Sync frontend to S3
         run: |
-          BUCKET=$(aws s3api list-buckets --query "Buckets[?starts_with(Name, '${PROJECT}-frontend-')].Name | [0]" --output text)
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="${PROJECT}-frontend-${ACCOUNT}"
           aws s3 sync frontend/dist "s3://$BUCKET" --delete
           echo "BUCKET=$BUCKET" >> "$GITHUB_ENV"
 
