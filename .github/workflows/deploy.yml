@@ -34,7 +34,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           IMAGE="$ECR_REGISTRY/$PROJECT:latest"
-          docker build -t "$IMAGE" backend
+          docker build --platform linux/amd64 -t "$IMAGE" backend
           docker push "$IMAGE"
 
       - name: Deploy App Runner

@@ -34,8 +34,7 @@ ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 
 echo "==> Building and pushing API image to $ECR"
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ACCOUNT.dkr.ecr.$REGION.amazonaws.com"
-docker build -t "$ECR:latest" "$ROOT/backend"
-docker push "$ECR:latest"
+docker buildx build --platform linux/amd64 -t "${ECR}:latest" --push "$ROOT/backend"
 
 echo "==> Phase 2: App Runner"
 terraform apply -input=false -auto-approve \

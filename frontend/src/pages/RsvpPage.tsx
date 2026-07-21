@@ -132,8 +132,8 @@ export function RsvpPage() {
       const payload = invite.guests.map((g) => {
         const d = drafts[g.id]
         // Unchecked people on a multi-guest invite count as declined once any choice is made
-        const status =
-          d.rsvp_status === 'attending' ? 'attending' : ('declined' as const)
+        const status: 'attending' | 'declined' =
+          d.rsvp_status === 'attending' ? 'attending' : 'declined'
         return {
           guest_id: g.id,
           rsvp_status: status,
