@@ -1,7 +1,7 @@
 import uuid
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -13,6 +13,8 @@ from app.config import settings
 from app.database import get_db
 from app.invite_codes import require_invite_code, resolve_invite_code
 from app.models import Invite, Photo, PhotoStatus
+from app.notifications import notify_photo_upload
+from app.notify_once import claim_notification
 from app.rate_limit import client_ip, limiter
 from app.schemas import PhotoAdminUpdate, PhotoOut
 from app.services import get_invite_by_token
@@ -59,6 +61,7 @@ def _is_admin(request: Request, credentials: HTTPAuthorizationCredentials | None
 @router.post("/mine", response_model=PhotoOut, status_code=status.HTTP_201_CREATED)
 async def upload_photo(
     request: Request,
+    background_tasks: BackgroundTasks,
     uploader_name: str = Form(...),
     caption: str | None = Form(None),
     file: UploadFile = File(...),
@@ -86,8 +89,9 @@ async def upload_photo(
 
     photo = Photo(
         invite_id=invite.id,
-        uploader_name=uploader_name.strip() or invite.household_name,
-        caption=caption,
+        uploader_name=(uploader_name.strip() if uploader_name else "")
+        or f"Credit: {invite.household_name}",
+        caption=(caption.strip() if caption else None) or None,
         filename=stored_name,
         original_filename=file.filename or stored_name,
         content_type=content_type,
@@ -96,6 +100,22 @@ async def upload_photo(
     db.add(photo)
     db.commit()
     db.refresh(photo)
+
+    # One photo-upload email per guest browser session.
+    if claim_notification(request, "photo"):
+        background_tasks.add_task(
+            notify_photo_upload,
+            household_name=invite.household_name,
+            invite_id=str(invite.id),
+            contact_email=invite.email,
+            uploader_name=photo.uploader_name,
+            caption=photo.caption,
+            original_filename=photo.original_filename,
+            filename=photo.filename,
+            content_type=photo.content_type,
+            photo_id=str(photo.id),
+            status=photo.status.value,
+        )
     return serialize_photo(photo)
 
 

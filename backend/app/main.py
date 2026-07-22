@@ -6,7 +6,7 @@ from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.invite_codes import CODE_LENGTH, generate_invite_code, normalize_invite_code
 from app.models import Invite
-from app.routers import admin, auth, party, photos, rsvp
+from app.routers import admin, auth, exports, party, photos, rsvp
 from app.sessions import SessionCookieCleanupMiddleware
 
 Base.metadata.create_all(bind=engine)
@@ -71,6 +71,7 @@ app.add_middleware(
 app.include_router(party.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(exports.router)
 app.include_router(rsvp.router)
 app.include_router(photos.router)
 

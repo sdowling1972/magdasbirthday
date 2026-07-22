@@ -703,6 +703,68 @@ th {
   margin-bottom: 0.35rem;
 }
 
+.guest-main {
+  min-width: 0;
+}
+
+.guest-nav a.active {
+  color: var(--ink);
+}
+
+.guest-nav-signout {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.guest-nav-signout:hover {
+  border-color: var(--ink-soft);
+  background: rgba(255, 253, 249, 0.7);
+}
+
+.guest-page {
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+.album-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 42, 58, 0.82);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  z-index: 50;
+  animation: fadeIn 0.2s ease both;
+}
+
+.album-lightbox-inner {
+  max-width: min(900px, 100%);
+  text-align: center;
+}
+
+.album-lightbox-inner img {
+  max-width: 100%;
+  max-height: 75vh;
+  border-radius: 4px;
+}
+
+.album-lightbox-inner p {
+  color: white;
+  margin: 0.75rem 0 1rem;
+}
+
+.album-lightbox-inner .btn {
+  color: white;
+}
+
 @keyframes riseIn {
   from {
     opacity: 0;
@@ -780,3 +842,252 @@ th {
     order: -1;
   }
 }
+
+/* Guest-only mobile experience (admin layouts are unchanged) */
+@media (max-width: 720px) {
+  .guest-app {
+    width: min(1120px, calc(100% - 1.25rem));
+  }
+
+  .guest-app .guest-main {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .guest-app.login-wrap {
+    width: 100%;
+    padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    align-content: center;
+  }
+
+  .guest-app .guest-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    padding: 0.75rem 0;
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    background: rgba(243, 235, 227, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .guest-app .brand {
+    font-size: clamp(1.25rem, 5.5vw, 1.55rem);
+    line-height: 1.2;
+    max-width: 100%;
+  }
+
+  .guest-app .guest-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    align-items: stretch;
+    margin: 0;
+    padding: 0.35rem 0.35rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 253, 249, 0.96);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 28px rgba(26, 42, 58, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .guest-app .guest-nav a,
+  .guest-app .guest-nav-signout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.85rem;
+    padding: 0.45rem 0.25rem;
+    border: none;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .guest-app .guest-nav a.active {
+    color: var(--blush-deep);
+    background: rgba(232, 160, 176, 0.16);
+  }
+
+  .guest-app .guest-nav-signout:hover {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .guest-app .hero,
+  .guest-app .landing-hero {
+    min-height: calc(100dvh - 4rem);
+    min-height: calc(100svh - 4rem);
+  }
+
+  .guest-app .hero h1 {
+    font-size: clamp(2.35rem, 11vw, 3.25rem);
+  }
+
+  .guest-app .hero p,
+  .guest-app .landing-login-link {
+    font-size: 1rem;
+  }
+
+  .guest-app .hero-portrait {
+    width: min(190px, 48vw);
+    margin-bottom: 0.5rem;
+  }
+
+  .guest-app .hero-content {
+    padding: 1.25rem 1rem 1.75rem;
+  }
+
+  .guest-app .hero-actions {
+    width: 100%;
+  }
+
+  .guest-app .hero-actions .btn,
+  .guest-app .hero-actions .landing-login-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .guest-app .section {
+    padding: 2rem 0 1.25rem;
+  }
+
+  .guest-app .section-head {
+    margin-bottom: 1.25rem;
+  }
+
+  .guest-app .panel {
+    padding: 1.15rem;
+  }
+
+  .guest-app .guest-page {
+    max-width: none;
+  }
+
+  .guest-app .guest-page h1 {
+    font-size: clamp(2rem, 9vw, 2.8rem) !important;
+  }
+
+  .guest-app .rsvp-choices {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .guest-app .rsvp-choices .choice {
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .guest-app .attendee-option {
+    min-height: 3rem;
+    padding: 0.95rem 1rem;
+  }
+
+  .guest-app .decline-all {
+    width: 100%;
+    justify-self: stretch;
+    min-height: 3rem;
+  }
+
+  .guest-app .btn {
+    min-height: 2.85rem;
+  }
+
+  .guest-app .inline-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .guest-app .inline-actions .btn {
+    width: 100%;
+  }
+
+  .guest-app .photo-grid,
+  .guest-app .guest-photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .guest-app .photo-meta {
+    font-size: 0.75rem;
+    padding: 0.55rem;
+  }
+
+  .guest-app .code-groups {
+    gap: 0.4rem;
+  }
+
+  .guest-app .code-group {
+    font-size: 1rem;
+    letter-spacing: 0.12em;
+    padding: 0.85rem 0.2rem;
+    min-height: 3rem;
+  }
+
+  .guest-app .login-panel {
+    width: 100%;
+  }
+
+  .guest-app .login-panel h1 {
+    font-size: clamp(1.85rem, 8vw, 2.2rem);
+  }
+
+  .guest-app input,
+  .guest-app textarea,
+  .guest-app select {
+    font-size: 16px;
+    min-height: 2.85rem;
+  }
+
+  .guest-app textarea {
+    min-height: 5.5rem;
+  }
+
+  .guest-app .modal-backdrop {
+    padding: 1rem;
+    align-items: end;
+  }
+
+  .guest-app .modal-card {
+    width: 100%;
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .guest-app .album-lightbox {
+    padding: 0.75rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    align-items: end;
+  }
+
+  .guest-app .album-lightbox-inner {
+    width: 100%;
+  }
+
+  .guest-app .album-lightbox-inner img {
+    max-height: min(70dvh, 70vh);
+  }
+
+  .guest-app .album-lightbox-inner .btn {
+    width: 100%;
+    min-height: 2.85rem;
+  }
+}
+
+@media (max-width: 720px) {
+  body {
+    background-attachment: scroll;
+  }
+}
+

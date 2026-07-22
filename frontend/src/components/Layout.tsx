@@ -12,20 +12,23 @@ export function PublicLayout() {
   }
 
   return (
-    <div className="site-shell">
-      <header className="site-header">
+    <div className="site-shell guest-app">
+      <header className="site-header guest-header">
         <Link to="/home" className="brand">
           Magda<span>'s</span> Big Birthday
         </Link>
-        <nav className="nav-links">
-          <Link to="/rsvp">RSVP</Link>
-          <Link to="/album">Album</Link>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={signOut}>
+        <nav className="nav-links guest-nav" aria-label="Guest navigation">
+          <NavLink to="/home">Home</NavLink>
+          <NavLink to="/rsvp">RSVP</NavLink>
+          <NavLink to="/album">Album</NavLink>
+          <button type="button" className="guest-nav-signout" onClick={signOut}>
             Sign out
           </button>
         </nav>
       </header>
-      <Outlet />
+      <main className="guest-main">
+        <Outlet />
+      </main>
     </div>
   )
 }

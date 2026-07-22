@@ -2,3 +2,4 @@ aws_region  = "us-east-1"
 project     = "magdasbirthday"
 domain_name = "magdas-big-bday.com"
 # admin_password set via TF_VAR_admin_password or terraform.tfvars (gitignored)
+# smtp_password = "xxxx-xxxx-xxxx-xxxx"  # iCloud app-specific password

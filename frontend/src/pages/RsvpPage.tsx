@@ -6,6 +6,24 @@ import { useGuestAuth } from '../GuestAuth'
 import { normalizeInviteCode } from '../inviteCode'
 import type { InvitePublic, Photo, RsvpStatus } from '../types'
 
+const EMAIL_PROMPT_SEEN_KEY = 'magda_rsvp_email_prompt_seen'
+
+function hasSeenEmailPrompt(): boolean {
+  try {
+    return sessionStorage.getItem(EMAIL_PROMPT_SEEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markEmailPromptSeen() {
+  try {
+    sessionStorage.setItem(EMAIL_PROMPT_SEEN_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+}
+
 type Draft = {
   rsvp_status: RsvpStatus
 }
@@ -61,7 +79,6 @@ export function RsvpPage() {
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [uploaderName, setUploaderName] = useState('')
   const [caption, setCaption] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
@@ -144,7 +161,6 @@ export function RsvpPage() {
         const [data, photoList] = await Promise.all([api.getRsvp(), api.listInvitePhotos()])
         if (cancelled) return
         setInvite(data)
-        setUploaderName(data.household_name)
         const next: Record<string, Draft> = {}
         for (const g of data.guests) {
           next[g.id] = {
@@ -160,7 +176,7 @@ export function RsvpPage() {
         setGeneralComments(comments)
         setContactEmail(email)
         setBaseline(snapshotOf(next, email, message, comments))
-        setShowEmailPrompt(!email.trim())
+        setShowEmailPrompt(!email.trim() && !hasSeenEmailPrompt())
         setPhotos(photoList)
         setError('')
         setSaved(false)
@@ -220,9 +236,6 @@ export function RsvpPage() {
       setHouseholdMessage(message)
       setBaseline(snapshotOf(synced, email, message, comments))
       setSaved(true)
-      if (!email.trim()) {
-        setShowEmailPrompt(true)
-      }
       return true
     } catch (err) {
       if (seq !== saveSeq.current) return false
@@ -235,17 +248,14 @@ export function RsvpPage() {
 
   function setAttending(guestId: string, attending: boolean) {
     if (!invite) return
-    setDrafts((prev) => {
-      const next = {
-        ...prev,
-        [guestId]: {
-          ...prev[guestId],
-          rsvp_status: (attending ? 'attending' : 'declined') as RsvpStatus,
-        },
-      }
-      void saveRsvp(next, invite)
-      return next
-    })
+    setDrafts((prev) => ({
+      ...prev,
+      [guestId]: {
+        ...prev[guestId],
+        rsvp_status: (attending ? 'attending' : 'declined') as RsvpStatus,
+      },
+    }))
+    setSaved(false)
   }
 
   function setAllDeclined() {
@@ -255,9 +265,9 @@ export function RsvpPage() {
       for (const g of invite.guests) {
         next[g.id] = { ...next[g.id], rsvp_status: 'declined' }
       }
-      void saveRsvp(next, invite)
       return next
     })
+    setSaved(false)
   }
 
   async function onSubmit(e: FormEvent) {
@@ -311,8 +321,9 @@ export function RsvpPage() {
         try {
           const form = new FormData()
           form.append('file', file)
-          form.append('uploader_name', uploaderName || invite?.household_name || 'Guest')
-          if (caption) form.append('caption', caption)
+          const credit = `Credit: ${invite?.household_name || 'Guest'}`
+          form.append('uploader_name', credit)
+          if (caption.trim()) form.append('caption', caption.trim())
           const photo = await api.uploadPhoto(form)
           uploaded.push(photo)
         } catch (err) {
@@ -376,7 +387,7 @@ export function RsvpPage() {
   const allDeclined = anyAnswered && attendingGuests.length === 0
 
   return (
-    <div className="section stack" style={{ maxWidth: 720, marginInline: 'auto' }}>
+    <div className="section stack guest-page">
       <div style={{ animation: 'riseIn 0.6s ease both' }}>
         <p className="hero-eyebrow" style={{ color: 'var(--blush-deep)' }}>
           Personal invitation
@@ -440,9 +451,8 @@ export function RsvpPage() {
         ) : (
           <div className="stack">
             <p className="muted" style={{ margin: 0 }}>
-              Select everyone from this invite who will be attending. Changes save automatically.
-            </p>
-            <div className="attendee-checklist">
+              Select everyone from this invite who will be attending, then save your RSVP.
+            </p>            <div className="attendee-checklist">
               {invite.guests.map((g) => {
                 const d = drafts[g.id]
                 if (!d) return null
@@ -502,8 +512,11 @@ export function RsvpPage() {
         {error && <p className="error">{error}</p>}
         {saving && <p className="muted">Saving…</p>}
         {!saving && saved && <p className="success">RSVP saved — thank you!</p>}
-        <button className="btn btn-primary" type="submit" disabled={saving}>
-          {saving ? 'Saving…' : 'Save email & message'}
+        {!saving && isDirty && !saved && (
+          <p className="muted">You have unsaved changes. Save before leaving this page.</p>
+        )}
+        <button className="btn btn-primary" type="submit" disabled={saving || !isDirty}>
+          {saving ? 'Saving…' : 'Save RSVP'}
         </button>
       </form>
 
@@ -511,14 +524,16 @@ export function RsvpPage() {
         <h2 style={{ fontSize: '1.8rem', margin: 0 }}>Share photos of Magda</h2>
         <p className="muted" style={{ margin: 0 }}>
           Upload one or more pictures for the party slideshow. Approved photos also appear in the public album.
+          Photos are credited as <strong>Credit: {invite.household_name}</strong>.
         </p>
         <div className="form-row">
-          <label htmlFor="uploader">Your name</label>
-          <input id="uploader" value={uploaderName} onChange={(e) => setUploaderName(e.target.value)} required />
-        </div>
-        <div className="form-row">
-          <label htmlFor="caption">Caption (optional, applied to this batch)</label>
-          <input id="caption" value={caption} onChange={(e) => setCaption(e.target.value)} />
+          <label htmlFor="caption">Your caption (optional)</label>
+          <input
+            id="caption"
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            placeholder="Add a short caption for these photos…"
+          />
         </div>
         <div className="form-row">
           <label htmlFor="file">Photos</label>
@@ -584,7 +599,8 @@ export function RsvpPage() {
                 <img src={p.url || ''} alt={p.caption || 'Upload'} />
                 <div className="photo-meta">
                   <span className={statusBadgeClass(p.status)}>{statusLabel(p.status)}</span>
-                  {p.caption && <div style={{ marginTop: '0.35rem' }}>{p.caption}</div>}
+                  <div style={{ marginTop: '0.35rem' }}>{p.uploader_name}</div>
+                  {p.caption && <div style={{ marginTop: '0.25rem' }}>{p.caption}</div>}
                 </div>
               </div>
             ))}
@@ -611,6 +627,7 @@ export function RsvpPage() {
               type="button"
               className="btn btn-primary"
               onClick={() => {
+                markEmailPromptSeen()
                 setShowEmailPrompt(false)
                 requestAnimationFrame(() => emailInputRef.current?.focus())
               }}

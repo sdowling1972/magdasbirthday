@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     s3_prefix: str = "photos/"
     aws_region: str = "us-east-1"
 
+    # iCloud SMTP (app-specific password). From/to default to the same address.
+    mail_from: str = "sdowling@factorydata.ca"
+    mail_to: str = "sdowling@factorydata.ca"
+    smtp_host: str = "smtp.mail.me.com"
+    smtp_port: int = 587
+    smtp_username: str = "sdowling@factorydata.ca"
+    smtp_password: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.environment.lower() in {"production", "prod"}

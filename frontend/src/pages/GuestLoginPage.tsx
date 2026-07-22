@@ -79,7 +79,7 @@ export function GuestLoginPage() {
   }
 
   return (
-    <div className="login-wrap">
+    <div className="login-wrap guest-app">
       <div className="login-panel panel" style={{ width: 'min(480px, 100%)' }}>
         <p className="muted" style={{ marginTop: 0, letterSpacing: '0.16em', textTransform: 'uppercase', fontSize: '0.75rem' }}>
           Magda&apos;s Big Birthday

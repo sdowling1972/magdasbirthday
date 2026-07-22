@@ -71,6 +71,47 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return res.json() as Promise<T>
 }
 
+function filenameFromDisposition(header: string | null, fallback: string): string {
+  if (!header) return fallback
+  const utf = /filename\*=UTF-8''([^;]+)/i.exec(header)
+  if (utf?.[1]) {
+    try {
+      return decodeURIComponent(utf[1].trim())
+    } catch {
+      /* ignore */
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header)
+  return plain?.[1]?.trim() || fallback
+}
+
+async function downloadAdminFile(path: string, fallbackName: string): Promise<void> {
+  const headers = new Headers()
+  const token = getToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const res = await fetch(path, { headers, credentials: 'include' })
+  if (!res.ok) {
+    let detail = res.statusText
+    try {
+      const data = await res.json()
+      detail = data.detail || detail
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof detail === 'string' ? detail : 'Download failed')
+  }
+  const blob = await res.blob()
+  const filename = filenameFromDisposition(res.headers.get('Content-Disposition'), fallbackName)
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
 export const api = {
   getParty: () => request<PartyInfo>('/api/party', { invite: true }),
 
@@ -96,6 +137,17 @@ export const api = {
   logoutAdmin: () => request<void>('/api/admin/logout', { method: 'POST', admin: true }),
 
   getStats: () => request<DashboardStats>('/api/admin/stats', { admin: true }),
+
+  downloadInviteeStatus: () =>
+    downloadAdminFile('/api/admin/exports/invitee-status', 'magda-invitee-status.csv'),
+
+  downloadInvitations: () => {
+    const base = encodeURIComponent(window.location.origin)
+    return downloadAdminFile(
+      `/api/admin/exports/invitations?base_url=${base}`,
+      'magda-invitations.csv',
+    )
+  },
 
   listInvites: () => request<InviteListItem[]>('/api/admin/invites', { admin: true }),
 

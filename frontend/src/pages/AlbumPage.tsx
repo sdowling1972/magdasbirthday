@@ -15,7 +15,7 @@ export function AlbumPage() {
   }, [])
 
   return (
-    <div className="section">
+    <div className="section guest-page">
       <div className="section-head">
         <h2>Photo album</h2>
         <p>Moments with Magda, shared by friends and family.</p>
@@ -26,7 +26,7 @@ export function AlbumPage() {
       {photos.length === 0 ? (
         <p className="empty panel">No approved photos yet — check back soon.</p>
       ) : (
-        <div className="photo-grid">
+        <div className="photo-grid guest-photo-grid">
           {photos.map((p, i) => (
             <button
               key={p.id}
@@ -47,31 +47,18 @@ export function AlbumPage() {
 
       {active && (
         <div
+          className="album-lightbox"
           role="dialog"
           aria-modal="true"
           onClick={() => setActive(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(26, 42, 58, 0.82)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: '1.5rem',
-            zIndex: 50,
-            animation: 'fadeIn 0.2s ease both',
-          }}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 'min(900px, 100%)', textAlign: 'center' }}>
-            <img
-              src={active.url || ''}
-              alt={active.caption || 'Photo'}
-              style={{ maxWidth: '100%', maxHeight: '75vh', borderRadius: 4 }}
-            />
-            <p style={{ color: 'white', marginTop: '0.75rem' }}>
+          <div className="album-lightbox-inner" onClick={(e) => e.stopPropagation()}>
+            <img src={active.url || ''} alt={active.caption || 'Photo'} />
+            <p>
               {active.uploader_name}
               {active.caption ? ` — ${active.caption}` : ''}
             </p>
-            <button type="button" className="btn btn-secondary" onClick={() => setActive(null)} style={{ color: 'white' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setActive(null)}>
               Close
             </button>
           </div>

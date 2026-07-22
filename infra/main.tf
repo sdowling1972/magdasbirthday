@@ -36,6 +36,13 @@ variable "admin_password" {
   sensitive = true
 }
 
+variable "smtp_password" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "iCloud app-specific password for RSVP notification email"
+}
+
 variable "db_password" {
   type      = string
   sensitive = true
@@ -233,6 +240,12 @@ resource "aws_apprunner_service" "api" {
           PARTY_DATE        = "2026-08-15"
           PARTY_LOCATION    = "38 Bowcott Cres., London"
           PARTY_DESCRIPTION = "Join us to celebrate Magda!"
+          MAIL_FROM         = "sdowling@factorydata.ca"
+          MAIL_TO           = "sdowling@factorydata.ca"
+          SMTP_HOST         = "smtp.mail.me.com"
+          SMTP_PORT         = "587"
+          SMTP_USERNAME     = "sdowling@factorydata.ca"
+          SMTP_PASSWORD     = var.smtp_password
         }
       }
     }

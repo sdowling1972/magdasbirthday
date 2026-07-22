@@ -13,7 +13,7 @@ export function LandingPage() {
   }
 
   return (
-    <div className="site-shell">
+    <div className="site-shell guest-app">
       <section className="hero landing-hero">
         <div className="hero-content">
           <h1>
