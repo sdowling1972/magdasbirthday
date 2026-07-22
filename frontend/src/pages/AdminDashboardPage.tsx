@@ -23,9 +23,14 @@ export function AdminDashboardPage() {
             Snapshot of Magda&apos;s party planning.
           </p>
         </div>
-        <Link to="/admin/invites" className="btn btn-primary">
-          Manage invites
-        </Link>
+        <div className="inline-actions">
+          <Link to="/admin/album" className="btn btn-secondary">
+            Photo album
+          </Link>
+          <Link to="/admin/invites" className="btn btn-primary">
+            Manage invites
+          </Link>
+        </div>
       </div>
 
       {error && <p className="error">{error}</p>}

@@ -60,6 +60,7 @@ export function AdminLayout() {
           </NavLink>
           <NavLink to="/admin/invites">Invites</NavLink>
           <NavLink to="/admin/photos">Photos</NavLink>
+          <NavLink to="/admin/album">Album</NavLink>
         </nav>
         <main className="admin-main">
           <Outlet />

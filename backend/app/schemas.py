@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models import PhotoStatus, RsvpStatus
 
@@ -71,6 +71,7 @@ class InviteOut(BaseModel):
     email: str | None
     max_guests: int
     notes: str | None
+    general_comments: str | None = None
     created_at: datetime
     updated_at: datetime
     guests: list[GuestOut]
@@ -83,6 +84,8 @@ class InvitePublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     household_name: str
+    email: str | None = None
+    general_comments: str | None = None
     max_guests: int
     guests: list[GuestOut]
     party: PartyInfo
@@ -122,8 +125,35 @@ class PhotoOut(BaseModel):
     url: str | None = None
 
 
-class PhotoStatusUpdate(BaseModel):
-    status: PhotoStatus
+class PhotoAdminUpdate(BaseModel):
+    """Partial photo update — every field is optional."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: PhotoStatus | None = Field(default=None)
+    caption: str | None = Field(default=None)
+    uploader_name: str | None = Field(default=None)
+
+    @field_validator("caption", mode="before")
+    @classmethod
+    def blank_caption_to_none(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("uploader_name", mode="before")
+    @classmethod
+    def normalize_uploader_name(cls, value: object) -> object:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Uploader name cannot be empty")
+        return cleaned[:200]
 
 
 class AdminLogin(BaseModel):

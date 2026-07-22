@@ -137,6 +137,12 @@ export function AdminInviteDetailPage() {
             <input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
+        {invite.general_comments && (
+          <div className="form-row">
+            <label>Guest comments</label>
+            <p style={{ margin: 0 }}>{invite.general_comments}</p>
+          </div>
+        )}
         <button className="btn btn-primary" type="submit">
           Save changes
         </button>
@@ -153,7 +159,6 @@ export function AdminInviteDetailPage() {
                 <div style={{ marginTop: '0.35rem' }}>
                   <StatusBadge status={g.rsvp_status} />
                 </div>
-                {g.dietary_notes && <p className="muted" style={{ margin: '0.35rem 0 0' }}>Diet: {g.dietary_notes}</p>}
                 {g.message && <p className="muted" style={{ margin: '0.35rem 0 0' }}>&ldquo;{g.message}&rdquo;</p>}
               </div>
               <button type="button" className="btn btn-danger btn-sm" onClick={() => removeGuest(g.id)}>

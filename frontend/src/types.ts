@@ -27,6 +27,7 @@ export interface Invite {
   email: string | null
   max_guests: number
   notes: string | null
+  general_comments: string | null
   created_at: string
   updated_at: string
   guests: Guest[]
@@ -50,6 +51,8 @@ export interface InviteListItem {
 
 export interface InvitePublic {
   household_name: string
+  email: string | null
+  general_comments: string | null
   max_guests: number
   guests: Guest[]
   party: PartyInfo

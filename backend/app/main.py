@@ -7,8 +7,17 @@ from app.database import Base, SessionLocal, engine
 from app.invite_codes import CODE_LENGTH, generate_invite_code, normalize_invite_code
 from app.models import Invite
 from app.routers import admin, auth, party, photos, rsvp
+from app.sessions import SessionCookieCleanupMiddleware
 
 Base.metadata.create_all(bind=engine)
+
+
+def migrate_schema() -> None:
+    """Add columns introduced after the initial create_all."""
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            "ALTER TABLE invites ADD COLUMN IF NOT EXISTS general_comments TEXT"
+        )
 
 
 def migrate_invite_codes() -> None:
@@ -35,6 +44,7 @@ def migrate_invite_codes() -> None:
         db.close()
 
 
+migrate_schema()
 migrate_invite_codes()
 
 _docs = None if settings.is_production else "/docs"
@@ -49,6 +59,7 @@ app = FastAPI(
     openapi_url=_openapi,
 )
 
+app.add_middleware(SessionCookieCleanupMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,

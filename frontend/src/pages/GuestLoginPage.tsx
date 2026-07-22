@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useGuestAuth } from '../GuestAuth'
-import { formatInviteCode, getInviteCode, normalizeInviteCode } from '../inviteCode'
+import { formatInviteCode, normalizeInviteCode } from '../inviteCode'
 
 export function GuestLoginPage() {
-  const { isAuthenticated, login } = useGuestAuth()
+  const { isAuthenticated, ready, login } = useGuestAuth()
   const navigate = useNavigate()
   const [parts, setParts] = useState(['', '', '', ''])
   const [error, setError] = useState('')
@@ -20,7 +20,11 @@ export function GuestLoginPage() {
     input0.current?.focus()
   }, [])
 
-  if (isAuthenticated || getInviteCode()) {
+  if (!ready) {
+    return <p className="muted section">Loading…</p>
+  }
+
+  if (isAuthenticated) {
     return <Navigate to="/home" replace />
   }
 

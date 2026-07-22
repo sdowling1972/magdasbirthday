@@ -1,11 +1,14 @@
 import { Link, Navigate } from 'react-router-dom'
 import { useGuestAuth } from '../GuestAuth'
-import { getInviteCode } from '../inviteCode'
 
 export function LandingPage() {
-  const { isAuthenticated } = useGuestAuth()
+  const { isAuthenticated, ready } = useGuestAuth()
 
-  if (isAuthenticated || getInviteCode()) {
+  if (!ready) {
+    return <p className="muted section">Loading…</p>
+  }
+
+  if (isAuthenticated) {
     return <Navigate to="/home" replace />
   }
 

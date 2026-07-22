@@ -37,6 +37,11 @@ export function HomePage() {
             {party?.description}
             {party ? ` · ${formatDate(party.date)} · ${party.location}` : ''}
           </p>
+          {party && (
+            <p className="muted" style={{ marginTop: '-0.75rem', marginBottom: '1.75rem', color: 'rgba(255, 253, 249, 0.75)' }}>
+              (rain date August 22)
+            </p>
+          )}
           <div className="hero-actions">
             <Link to="/album" className="btn btn-blush">
               Browse the album
@@ -52,8 +57,8 @@ export function HomePage() {
         <div className="section-head">
           <h2>How it works</h2>
           <p>
-            Guests receive a personal RSVP link for their household. They can confirm attendance,
-            share dietary notes, and upload favorite photos of Magda for the party slideshow.
+            Guests receive a personal RSVP link for their household. They can confirm attendance
+            and upload favorite photos of Magda for the party slideshow.
           </p>
         </div>
       </section>

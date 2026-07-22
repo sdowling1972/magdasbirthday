@@ -9,7 +9,6 @@ import type {
   PhotoStatus,
   Guest,
 } from './types'
-import { clearInviteCode } from './inviteCode'
 
 const ADMIN_TOKEN_KEY = 'magda_admin_token'
 
@@ -47,11 +46,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers,
     credentials: 'include',
   })
-  if (res.status === 401 && admin) {
-    clearToken()
-  }
-  if (res.status === 401 && invite) {
-    clearInviteCode()
+  if (res.status === 401) {
+    if (admin) {
+      clearToken()
+      if (path !== '/api/admin/logout') {
+        void fetch('/api/admin/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined)
+      }
+    }
   }
   if (!res.ok) {
     let detail = res.statusText
@@ -77,6 +78,11 @@ export const api = {
     request<{ code: string; formatted_code: string; invite: InvitePublic }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ code }),
+    }),
+
+  getGuestSession: () =>
+    request<{ code: string; formatted_code: string; invite: InvitePublic }>('/api/auth/session', {
+      invite: true,
     }),
 
   logoutGuest: () => request<void>('/api/auth/logout', { method: 'POST' }),
@@ -127,10 +133,16 @@ export const api = {
       dietary_notes?: string | null
       message?: string | null
     }>,
+    email?: string | null,
+    generalComments?: string | null,
   ) =>
-    request<Guest[]>('/api/rsvp', {
+    request<InvitePublic>('/api/rsvp', {
       method: 'PUT',
-      body: JSON.stringify({ guests }),
+      body: JSON.stringify({
+        guests,
+        email: email?.trim() || null,
+        general_comments: generalComments?.trim() || null,
+      }),
       invite: true,
     }),
 
@@ -145,6 +157,16 @@ export const api = {
     const q = status ? `?status_filter=${status}` : ''
     return request<Photo[]>(`/api/photos/admin${q}`, { admin: true })
   },
+
+  updatePhoto: (
+    id: string,
+    data: { status?: PhotoStatus; caption?: string | null; uploader_name?: string },
+  ) =>
+    request<Photo>(`/api/photos/admin/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+      admin: true,
+    }),
 
   updatePhotoStatus: (id: string, status: PhotoStatus) =>
     request<Photo>(`/api/photos/admin/${id}`, {

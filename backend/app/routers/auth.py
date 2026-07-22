@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.invite_codes import CODE_LENGTH, format_invite_code, normalize_invite_code
+from app.invite_codes import CODE_LENGTH, format_invite_code, normalize_invite_code, require_invite_code
+from app.models import Invite
 from app.rate_limit import client_ip, limiter
 from app.schemas import InvitePublic, PartyInfo
 from app.services import get_invite_by_token
@@ -21,6 +22,22 @@ class AuthOut(BaseModel):
     code: str
     formatted_code: str
     invite: InvitePublic
+
+
+def _public_invite(invite: Invite) -> InvitePublic:
+    return InvitePublic(
+        household_name=invite.household_name,
+        email=invite.email,
+        general_comments=invite.general_comments,
+        max_guests=invite.max_guests,
+        guests=invite.guests,
+        party=PartyInfo(
+            name=settings.party_name,
+            date=settings.party_date,
+            location=settings.party_location,
+            description=settings.party_description,
+        ),
+    )
 
 
 @router.post("/login", response_model=AuthOut)
@@ -41,17 +58,17 @@ def login_with_code(
     return AuthOut(
         code=invite.token,
         formatted_code=format_invite_code(invite.token),
-        invite=InvitePublic(
-            household_name=invite.household_name,
-            max_guests=invite.max_guests,
-            guests=invite.guests,
-            party=PartyInfo(
-                name=settings.party_name,
-                date=settings.party_date,
-                location=settings.party_location,
-                description=settings.party_description,
-            ),
-        ),
+        invite=_public_invite(invite),
+    )
+
+
+@router.get("/session", response_model=AuthOut)
+def current_session(invite: Invite = Depends(require_invite_code)) -> AuthOut:
+    """Return the invite for the current HttpOnly guest session cookie."""
+    return AuthOut(
+        code=invite.token,
+        formatted_code=format_invite_code(invite.token),
+        invite=_public_invite(invite),
     )
 
 

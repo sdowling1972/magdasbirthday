@@ -1,15 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { useGuestAuth } from '../GuestAuth'
-import { getInviteCode, normalizeInviteCode } from '../inviteCode'
+import { normalizeInviteCode } from '../inviteCode'
 import type { InvitePublic, Photo, RsvpStatus } from '../types'
 
 type Draft = {
   rsvp_status: RsvpStatus
-  dietary_notes: string
+}
+
+type FormSnapshot = {
+  email: string
   message: string
+  generalComments: string
+  drafts: Record<string, { rsvp_status: RsvpStatus }>
 }
 
 function formatDate(iso: string) {
@@ -22,11 +27,34 @@ function formatDate(iso: string) {
   })
 }
 
+function snapshotOf(
+  drafts: Record<string, Draft>,
+  email: string,
+  message: string,
+  generalComments: string,
+): FormSnapshot {
+  const slim: FormSnapshot['drafts'] = {}
+  for (const [id, d] of Object.entries(drafts)) {
+    slim[id] = { rsvp_status: d.rsvp_status }
+  }
+  return {
+    email: email.trim(),
+    message,
+    generalComments,
+    drafts: slim,
+  }
+}
+
+function snapshotsEqual(a: FormSnapshot | null, b: FormSnapshot) {
+  if (!a) return false
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
 export function RsvpPage() {
   const { token: tokenParam } = useParams<{ token: string }>()
-  const { login } = useGuestAuth()
+  const { login, ready, isAuthenticated } = useGuestAuth()
   const navigate = useNavigate()
-  const inviteCode = normalizeInviteCode(tokenParam || getInviteCode() || '')
+  const tokenFromUrl = normalizeInviteCode(tokenParam || '')
   const [invite, setInvite] = useState<InvitePublic | null>(null)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [photos, setPhotos] = useState<Photo[]>([])
@@ -42,10 +70,39 @@ export function RsvpPage() {
   const [uploadMsg, setUploadMsg] = useState('')
   /** Shared message for the household (applied to primary guest on save). */
   const [householdMessage, setHouseholdMessage] = useState('')
+  const [generalComments, setGeneralComments] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false)
+  const [baseline, setBaseline] = useState<FormSnapshot | null>(null)
+  const [leaveBusy, setLeaveBusy] = useState(false)
   const householdMessageRef = useRef(householdMessage)
   householdMessageRef.current = householdMessage
+  const generalCommentsRef = useRef(generalComments)
+  generalCommentsRef.current = generalComments
+  const contactEmailRef = useRef(contactEmail)
+  contactEmailRef.current = contactEmail
+  const emailInputRef = useRef<HTMLInputElement>(null)
   const saveSeq = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const currentSnapshot = useMemo(
+    () => snapshotOf(drafts, contactEmail, householdMessage, generalComments),
+    [drafts, contactEmail, householdMessage, generalComments],
+  )
+  const isDirty = Boolean(invite && baseline && !snapshotsEqual(baseline, currentSnapshot))
+  const isDirtyRef = useRef(isDirty)
+  isDirtyRef.current = isDirty
+  const blocker = useBlocker(isDirty)
+
+  useEffect(() => {
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      if (!isDirtyRef.current) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -70,23 +127,21 @@ export function RsvpPage() {
   }
 
   useEffect(() => {
-    if (!inviteCode || inviteCode.length !== 16) {
-      setError('Invite code required')
-      return
-    }
+    if (!ready) return
 
     let cancelled = false
     async function load() {
       try {
-        if (tokenParam) {
-          await login(inviteCode)
+        if (tokenFromUrl.length === 16) {
+          await login(tokenFromUrl)
           if (!cancelled) navigate('/rsvp', { replace: true })
           return
         }
-        const [data, photoList] = await Promise.all([
-          api.getRsvp(),
-          api.listInvitePhotos(),
-        ])
+        if (!isAuthenticated) {
+          if (!cancelled) navigate('/', { replace: true })
+          return
+        }
+        const [data, photoList] = await Promise.all([api.getRsvp(), api.listInvitePhotos()])
         if (cancelled) return
         setInvite(data)
         setUploaderName(data.household_name)
@@ -94,31 +149,37 @@ export function RsvpPage() {
         for (const g of data.guests) {
           next[g.id] = {
             rsvp_status: g.rsvp_status,
-            dietary_notes: g.dietary_notes || '',
-            message: g.message || '',
           }
         }
         setDrafts(next)
         const primary = data.guests.find((g) => g.is_primary) || data.guests[0]
-        setHouseholdMessage(primary?.message || '')
+        const message = primary?.message || ''
+        const email = data.email || ''
+        const comments = data.general_comments || ''
+        setHouseholdMessage(message)
+        setGeneralComments(comments)
+        setContactEmail(email)
+        setBaseline(snapshotOf(next, email, message, comments))
+        setShowEmailPrompt(!email.trim())
         setPhotos(photoList)
+        setError('')
+        setSaved(false)
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Invite not found')
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Could not load invitation')
+        }
       }
     }
     load()
     return () => {
       cancelled = true
     }
-  }, [inviteCode, tokenParam, login, navigate])
+  }, [ready, isAuthenticated, tokenFromUrl, login, navigate])
 
-  function updateDraft(guestId: string, patch: Partial<Draft>) {
-    setDrafts((prev) => ({ ...prev, [guestId]: { ...prev[guestId], ...patch } }))
-    setSaved(false)
-  }
-
-  async function saveRsvp(nextDrafts: Record<string, Draft>, currentInvite: InvitePublic) {
-    if (!inviteCode) return
+  async function saveRsvp(
+    nextDrafts: Record<string, Draft>,
+    currentInvite: InvitePublic,
+  ): Promise<boolean> {
     const seq = ++saveSeq.current
     setSaving(true)
     setError('')
@@ -132,17 +193,41 @@ export function RsvpPage() {
         return {
           guest_id: g.id,
           rsvp_status: status,
-          dietary_notes: status === 'attending' ? d.dietary_notes || null : null,
+          dietary_notes: null,
           message: g.id === primaryId ? householdMessageRef.current || null : null,
         }
       })
-      const guests = await api.submitRsvp(payload)
-      if (seq !== saveSeq.current) return
-      setInvite({ ...currentInvite, guests })
+      const updated = await api.submitRsvp(
+        payload,
+        contactEmailRef.current,
+        generalCommentsRef.current,
+      )
+      if (seq !== saveSeq.current) return false
+      setInvite(updated)
+      const email = updated.email || contactEmailRef.current
+      setContactEmail(email)
+      const comments = updated.general_comments || generalCommentsRef.current
+      setGeneralComments(comments)
+      const synced: Record<string, Draft> = {}
+      for (const g of updated.guests) {
+        synced[g.id] = {
+          rsvp_status: g.rsvp_status,
+        }
+      }
+      setDrafts(synced)
+      const primary = updated.guests.find((g) => g.is_primary) || updated.guests[0]
+      const message = primary?.message || householdMessageRef.current
+      setHouseholdMessage(message)
+      setBaseline(snapshotOf(synced, email, message, comments))
       setSaved(true)
+      if (!email.trim()) {
+        setShowEmailPrompt(true)
+      }
+      return true
     } catch (err) {
-      if (seq !== saveSeq.current) return
+      if (seq !== saveSeq.current) return false
       setError(err instanceof Error ? err.message : 'Could not save RSVP')
+      return false
     } finally {
       if (seq === saveSeq.current) setSaving(false)
     }
@@ -156,7 +241,6 @@ export function RsvpPage() {
         [guestId]: {
           ...prev[guestId],
           rsvp_status: (attending ? 'attending' : 'declined') as RsvpStatus,
-          dietary_notes: attending ? prev[guestId]?.dietary_notes || '' : '',
         },
       }
       void saveRsvp(next, invite)
@@ -169,7 +253,7 @@ export function RsvpPage() {
     setDrafts((prev) => {
       const next = { ...prev }
       for (const g of invite.guests) {
-        next[g.id] = { ...next[g.id], rsvp_status: 'declined', dietary_notes: '' }
+        next[g.id] = { ...next[g.id], rsvp_status: 'declined' }
       }
       void saveRsvp(next, invite)
       return next
@@ -191,9 +275,31 @@ export function RsvpPage() {
     await saveRsvp(drafts, invite)
   }
 
+  async function saveAndLeave() {
+    if (!invite || blocker.state !== 'blocked') return
+    setLeaveBusy(true)
+    try {
+      const anyDecided = invite.guests.some((g) => drafts[g.id]?.rsvp_status !== 'pending')
+      if (!anyDecided) {
+        setError(
+          invite.guests.length === 1
+            ? 'Please choose whether you will attend before saving'
+            : 'Select who is attending, or choose that no one can make it, before saving',
+        )
+        blocker.reset?.()
+        return
+      }
+      const ok = await saveRsvp(drafts, invite)
+      if (ok) blocker.proceed?.()
+      else blocker.reset?.()
+    } finally {
+      setLeaveBusy(false)
+    }
+  }
+
   async function onUpload(e: FormEvent) {
     e.preventDefault()
-    if (!inviteCode || files.length === 0) return
+    if (files.length === 0) return
     setUploading(true)
     setUploadMsg('')
     const uploaded: Photo[] = []
@@ -251,13 +357,16 @@ export function RsvpPage() {
   if (error && !invite) {
     return (
       <div className="section">
-        <h1>Invite not found</h1>
+        <h1>Could not load invitation</h1>
         <p className="error">{error}</p>
+        <button type="button" className="btn btn-primary" onClick={() => navigate('/login')}>
+          Enter invite code
+        </button>
       </div>
     )
   }
 
-  if (!invite) return <p className="muted section">Loading your invitation…</p>
+  if (!ready || !invite) return <p className="muted section">Loading your invitation…</p>
 
   const isSingle = invite.guests.length === 1
   const single = invite.guests[0]
@@ -276,11 +385,33 @@ export function RsvpPage() {
         <p className="muted">
           Dear {invite.household_name} — {formatDate(invite.party.date)} · {invite.party.location}
         </p>
+        <p className="muted" style={{ marginTop: '-0.5rem' }}>
+          (rain date August 22)
+        </p>
         <p>{invite.party.description}</p>
       </div>
 
       <form className="panel stack" onSubmit={onSubmit}>
         <h2 style={{ fontSize: '1.8rem' }}>Your RSVP</h2>
+
+        <div className="form-row">
+          <label htmlFor="contact-email">Primary contact email</label>
+          <input
+            id="contact-email"
+            ref={emailInputRef}
+            type="email"
+            autoComplete="email"
+            value={contactEmail}
+            onChange={(e) => {
+              setContactEmail(e.target.value)
+              setSaved(false)
+            }}
+            placeholder="you@example.com"
+          />
+          <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem' }}>
+            We&apos;ll use this for party updates.
+          </p>
+        </div>
 
         {isSingle && singleDraft ? (
           <div className="guest-item" style={{ borderBottom: 'none', paddingTop: 0 }}>
@@ -305,16 +436,6 @@ export function RsvpPage() {
                 Regretfully decline
               </button>
             </div>
-            {singleDraft.rsvp_status === 'attending' && (
-              <div className="form-row" style={{ marginBottom: '0.75rem' }}>
-                <label>Dietary notes</label>
-                <input
-                  value={singleDraft.dietary_notes}
-                  onChange={(e) => updateDraft(single.id, { dietary_notes: e.target.value })}
-                  placeholder="Allergies, preferences…"
-                />
-              </div>
-            )}
           </div>
         ) : (
           <div className="stack">
@@ -339,32 +460,15 @@ export function RsvpPage() {
                 )
               })}
             </div>
+            <p className="rsvp-or muted">- OR -</p>
             <button
               type="button"
-              className={`choice declined ${allDeclined ? 'active' : ''}`}
+              className={`btn btn-secondary decline-all ${allDeclined ? 'active' : ''}`}
               onClick={setAllDeclined}
               disabled={saving}
-              style={{ alignSelf: 'start' }}
             >
               No one from this invite can attend
             </button>
-
-            {attendingGuests.length > 0 && (
-              <div className="stack" style={{ marginTop: '0.5rem' }}>
-                <h3 style={{ fontSize: '1.25rem', margin: 0 }}>Dietary notes</h3>
-                {attendingGuests.map((g) => (
-                  <div key={g.id} className="form-row">
-                    <label htmlFor={`diet-${g.id}`}>{g.name}</label>
-                    <input
-                      id={`diet-${g.id}`}
-                      value={drafts[g.id]?.dietary_notes || ''}
-                      onChange={(e) => updateDraft(g.id, { dietary_notes: e.target.value })}
-                      placeholder="Allergies, preferences…"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -381,11 +485,25 @@ export function RsvpPage() {
           />
         </div>
 
+        <div className="form-row">
+          <label htmlFor="general-comments">General comments (optional)</label>
+          <textarea
+            id="general-comments"
+            rows={3}
+            value={generalComments}
+            onChange={(e) => {
+              setGeneralComments(e.target.value)
+              setSaved(false)
+            }}
+            placeholder="Anything else we should know…"
+          />
+        </div>
+
         {error && <p className="error">{error}</p>}
         {saving && <p className="muted">Saving…</p>}
         {!saving && saved && <p className="success">RSVP saved — thank you!</p>}
         <button className="btn btn-primary" type="submit" disabled={saving}>
-          {saving ? 'Saving…' : 'Save notes & message'}
+          {saving ? 'Saving…' : 'Save email & message'}
         </button>
       </form>
 
@@ -470,6 +588,79 @@ export function RsvpPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {showEmailPrompt && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="email-prompt-title"
+        >
+          <div className="modal-card panel">
+            <h2 id="email-prompt-title" style={{ fontSize: '1.5rem', marginTop: 0 }}>
+              One quick thing
+            </h2>
+            <p style={{ marginBottom: '1.25rem' }}>
+              Please fill in your email address so we can keep you updated... future updates will be
+              sent this way.
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setShowEmailPrompt(false)
+                requestAnimationFrame(() => emailInputRef.current?.focus())
+              }}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {blocker.state === 'blocked' && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="unsaved-title"
+        >
+          <div className="modal-card panel">
+            <h2 id="unsaved-title" style={{ fontSize: '1.5rem', marginTop: 0 }}>
+              Unsaved changes
+            </h2>
+            <p style={{ marginBottom: '1.25rem' }}>
+              Would you like to save your changes before leaving?
+            </p>
+            <div className="inline-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={leaveBusy || saving}
+                onClick={() => void saveAndLeave()}
+              >
+                {leaveBusy || saving ? 'Saving…' : 'Save changes'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={leaveBusy || saving}
+                onClick={() => blocker.proceed?.()}
+              >
+                Leave without saving
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={leaveBusy || saving}
+                onClick={() => blocker.reset?.()}
+              >
+                Stay
+              </button>
+            </div>
           </div>
         </div>
       )}

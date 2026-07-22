@@ -40,6 +40,7 @@ class Invite(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     max_guests: Mapped[int] = mapped_column(Integer, default=1)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    general_comments: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

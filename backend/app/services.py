@@ -23,6 +23,7 @@ def serialize_invite(invite: Invite) -> InviteOut:
         email=invite.email,
         max_guests=invite.max_guests,
         notes=invite.notes,
+        general_comments=invite.general_comments,
         created_at=invite.created_at,
         updated_at=invite.updated_at,
         guests=invite.guests,

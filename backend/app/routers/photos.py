@@ -14,7 +14,7 @@ from app.database import get_db
 from app.invite_codes import require_invite_code, resolve_invite_code
 from app.models import Invite, Photo, PhotoStatus
 from app.rate_limit import client_ip, limiter
-from app.schemas import PhotoOut, PhotoStatusUpdate
+from app.schemas import PhotoAdminUpdate, PhotoOut
 from app.services import get_invite_by_token
 from app.sessions import ADMIN_COOKIE
 from app.storage import get_storage
@@ -135,16 +135,24 @@ def admin_list_photos(
 
 
 @router.patch("/admin/{photo_id}", response_model=PhotoOut)
-def update_photo_status(
+def update_photo(
     photo_id: UUID,
-    payload: PhotoStatusUpdate,
+    payload: PhotoAdminUpdate,
     _: str = Depends(verify_admin_token),
     db: Session = Depends(get_db),
 ) -> PhotoOut:
     photo = db.get(Photo, photo_id)
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
-    photo.status = payload.status
+    fields = payload.model_fields_set
+    if not fields.intersection({"status", "caption", "uploader_name"}):
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    if "status" in fields and payload.status is not None:
+        photo.status = payload.status
+    if "caption" in fields:
+        photo.caption = payload.caption
+    if "uploader_name" in fields and payload.uploader_name is not None:
+        photo.uploader_name = payload.uploader_name
     db.commit()
     db.refresh(photo)
     return serialize_photo(photo)
