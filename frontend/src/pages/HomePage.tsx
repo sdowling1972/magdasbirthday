@@ -82,6 +82,11 @@ export function HomePage() {
             clicking the Album button at the top.
           </p>
         </div>
+        <p className="muted" style={{ marginTop: '1.5rem', maxWidth: '36rem' }}>
+          For help with the site or info about the get together, send an email to Sean (
+          <a href="mailto:sdowling@factorydata.ca">sdowling@factorydata.ca</a>
+          ).
+        </p>
       </section>
     </>
   )

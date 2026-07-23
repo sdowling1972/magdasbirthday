@@ -1,18 +1,38 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
-import type { DashboardStats } from '../types'
+import type { DashboardStats, InviteListItem } from '../types'
+
+function statusLabel(inv: InviteListItem): string {
+  if (inv.attending_count > 0 && inv.pending_count === 0 && inv.declined_count === 0) {
+    return 'All attending'
+  }
+  if (inv.declined_count > 0 && inv.attending_count === 0 && inv.pending_count === 0) {
+    return 'All declined'
+  }
+  if (inv.pending_count === inv.guest_count) {
+    return 'Awaiting reply'
+  }
+  return 'Partial'
+}
 
 export function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [invites, setInvites] = useState<InviteListItem[]>([])
   const [error, setError] = useState('')
   const [exportError, setExportError] = useState('')
   const [exporting, setExporting] = useState<'status' | 'invitations' | null>(null)
 
   useEffect(() => {
-    api
-      .getStats()
-      .then(setStats)
+    Promise.all([api.getStats(), api.listInvites()])
+      .then(([nextStats, nextInvites]) => {
+        setStats(nextStats)
+        setInvites(
+          [...nextInvites].sort((a, b) =>
+            a.household_name.localeCompare(b.household_name, undefined, { sensitivity: 'base' }),
+          ),
+        )
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
   }, [])
 
@@ -91,6 +111,63 @@ export function AdminDashboardPage() {
           </div>
         </div>
       )}
+
+      <div className="panel" style={{ marginTop: '1.25rem' }}>
+        <div style={{ marginBottom: '1rem' }}>
+          <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Invitee status</h2>
+          <p className="muted" style={{ margin: '0.35rem 0 0' }}>
+            Current RSVP status for each household.
+          </p>
+        </div>
+        {invites.length === 0 ? (
+          <p className="empty">No invites yet.</p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Household</th>
+                  <th>Email</th>
+                  <th>Guests</th>
+                  <th>Attending</th>
+                  <th>Pending</th>
+                  <th>Declined</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {invites.map((inv) => (
+                  <tr key={inv.id}>
+                    <td>
+                      <strong>{inv.household_name}</strong>
+                    </td>
+                    <td>{inv.email || <span className="muted">—</span>}</td>
+                    <td>
+                      {inv.guest_count} / {inv.max_guests}
+                    </td>
+                    <td>
+                      <span className="badge badge-ok">{inv.attending_count}</span>
+                    </td>
+                    <td>
+                      <span className="badge badge-warn">{inv.pending_count}</span>
+                    </td>
+                    <td>
+                      <span className="badge badge-danger">{inv.declined_count}</span>
+                    </td>
+                    <td>{statusLabel(inv)}</td>
+                    <td>
+                      <Link to={`/admin/invites/${inv.id}`} className="btn btn-secondary btn-sm">
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="panel stack" style={{ marginTop: '1.25rem' }}>
         <div>
