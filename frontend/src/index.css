@@ -176,7 +176,8 @@ h3,
   --hero-band-inset: clamp(1.5rem, 5vh, 3rem);
   min-height: calc(100vh - 5rem);
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: clamp(0.75rem, 2vw, 1.5rem);
   align-items: center;
   padding: var(--hero-band-inset) 0;
   position: relative;
@@ -199,8 +200,10 @@ h3,
   position: relative;
   z-index: 1;
   color: var(--paper);
-  padding: clamp(1.5rem, 4vh, 2.5rem) clamp(1.5rem, 5vw, 4rem);
-  max-width: 34rem;
+  justify-self: end;
+  width: min(40rem, 100%);
+  max-width: none;
+  padding: clamp(1.5rem, 4vh, 2.5rem) 0 clamp(1.5rem, 4vh, 2.5rem) clamp(1.25rem, 4vw, 3rem);
   animation: riseIn 0.9s 0.15s ease both;
 }
 
@@ -209,7 +212,7 @@ h3,
   z-index: 1;
   width: clamp(200px, 28vw, 340px);
   aspect-ratio: 3 / 4;
-  margin-right: clamp(1.5rem, 5vw, 4rem);
+  margin-right: clamp(1.25rem, 4vw, 3rem);
   border-radius: 50%;
   overflow: hidden;
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
@@ -243,13 +246,43 @@ h3,
   margin: 0 0 1.75rem;
   font-size: 1.05rem;
   color: rgba(255, 253, 249, 0.85);
-  max-width: 28rem;
+  max-width: none;
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.hero-party-notes {
+  margin: 0 0 1.75rem;
+  max-width: none;
+  display: grid;
+  gap: 0.45rem;
+  color: rgba(255, 253, 249, 0.82);
+  font-size: 0.98rem;
+}
+
+.hero-party-notes p {
+  margin: 0;
+  max-width: none;
+}
+
+.hero-party-notes strong {
+  color: var(--gold-soft);
+  font-weight: 600;
+}
+
+.hero-map-link {
+  color: var(--gold-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+.hero-map-link:hover {
+  color: var(--paper);
 }
 
 .landing-hero {
@@ -743,10 +776,12 @@ th {
   padding: 1.5rem;
   z-index: 50;
   animation: fadeIn 0.2s ease both;
+  touch-action: pan-y;
 }
 
 .album-lightbox-inner {
   max-width: min(900px, 100%);
+  width: 100%;
   text-align: center;
 }
 
@@ -754,6 +789,8 @@ th {
   max-width: 100%;
   max-height: 75vh;
   border-radius: 4px;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .album-lightbox-inner p {
@@ -761,8 +798,53 @@ th {
   margin: 0.75rem 0 1rem;
 }
 
+.album-lightbox-count {
+  color: rgba(255, 253, 249, 0.7) !important;
+  margin: -0.5rem 0 1rem !important;
+  font-size: 0.9rem;
+}
+
 .album-lightbox-inner .btn {
   color: white;
+}
+
+.album-nav {
+  appearance: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  border: 1px solid rgba(255, 253, 249, 0.35);
+  background: rgba(26, 42, 58, 0.55);
+  color: white;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  font-size: 2rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0 0 0.15rem;
+  transition: background 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+
+.album-nav-prev {
+  left: max(0.75rem, env(safe-area-inset-left, 0px));
+}
+
+.album-nav-next {
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+.album-nav:hover:not(:disabled) {
+  background: rgba(26, 42, 58, 0.85);
+  border-color: rgba(255, 253, 249, 0.7);
+}
+
+.album-nav:disabled {
+  opacity: 0.28;
+  cursor: default;
 }
 
 @keyframes riseIn {
@@ -825,11 +907,18 @@ th {
 
   .hero-content {
     max-width: none;
+    width: 100%;
+    justify-self: stretch;
     padding: clamp(1.5rem, 4vh, 2.5rem) clamp(1.25rem, 4vw, 2rem);
   }
 
   .hero-content p {
     margin-inline: auto;
+  }
+
+  .hero-party-notes {
+    margin-inline: auto;
+    text-align: left;
   }
 
   .hero-actions {
@@ -1082,6 +1171,10 @@ th {
   .guest-app .album-lightbox-inner .btn {
     width: 100%;
     min-height: 2.85rem;
+  }
+
+  .guest-app .album-nav {
+    top: 38%;
   }
 }
 

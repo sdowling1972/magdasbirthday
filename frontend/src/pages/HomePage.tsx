@@ -13,6 +13,9 @@ function formatDate(iso: string) {
   })
 }
 
+const MAPS_ADDRESS = '38 Bowcott Cres, London, Ontario, Canada'
+const MAPS_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(MAPS_ADDRESS)}`
+
 export function HomePage() {
   const [party, setParty] = useState<PartyInfo | null>(null)
 
@@ -35,12 +38,35 @@ export function HomePage() {
           <h1>{party?.name ?? "Magda's Big Birthday"}</h1>
           <p>
             {party?.description}
-            {party ? ` · ${formatDate(party.date)} · ${party.location}` : ''}
+            {party ? (
+              <>
+                {` · ${formatDate(party.date)} · `}
+                <a
+                  className="hero-map-link"
+                  href={MAPS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {party.location}
+                </a>
+              </>
+            ) : null}
           </p>
           {party && (
-            <p className="muted" style={{ marginTop: '-0.75rem', marginBottom: '1.75rem', color: 'rgba(255, 253, 249, 0.75)' }}>
-              (rain date August 22)
-            </p>
+            <>
+              <p className="muted" style={{ marginTop: '-0.75rem', marginBottom: '1rem', color: 'rgba(255, 253, 249, 0.75)' }}>
+                (rain date August 22)
+              </p>
+              <div className="hero-party-notes">
+                <p>
+                  <strong>Format:</strong> Please swing by any time between 2–7pm — no strict schedule.
+                </p>
+                <p>Party food + refreshments will be taken care of</p>
+                <p>
+                  <strong>Note:</strong> This is not a surprise… Magda knows and she&apos;s hyped!
+                </p>
+              </div>
+            </>
           )}
           <div className="hero-actions">
             <Link to="/album" className="btn btn-blush">
@@ -57,8 +83,9 @@ export function HomePage() {
         <div className="section-head">
           <h2>How it works</h2>
           <p>
-            Guests receive a personal RSVP link for their household. They can confirm attendance
-            and upload favorite photos of Magda for the party slideshow.
+            Click the RSVP button at the top of the page, fill in your details, and upload any fun
+            photos you might have with Magda! You can also browse the photo album from others by
+            clicking the Album button at the top.
           </p>
         </div>
       </section>
