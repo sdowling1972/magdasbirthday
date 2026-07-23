@@ -38,9 +38,11 @@ export function HomePage() {
           <h1>{party?.name ?? "Magda's Big Birthday"}</h1>
           <p>
             {party?.description}
-            {party ? (
-              <>
-                {` · ${formatDate(party.date)} · `}
+            {party ? ` · ${formatDate(party.date)}` : ''}
+          </p>
+          {party && (
+            <>
+              <p className="hero-address">
                 <a
                   className="hero-map-link"
                   href={MAPS_URL}
@@ -49,22 +51,14 @@ export function HomePage() {
                 >
                   {party.location}
                 </a>
-              </>
-            ) : null}
-          </p>
-          {party && (
-            <>
+              </p>
               <p className="muted" style={{ marginTop: '-0.75rem', marginBottom: '1rem', color: 'rgba(255, 253, 249, 0.75)' }}>
                 (rain date August 22)
               </p>
               <div className="hero-party-notes">
-                <p>
-                  <strong>Format:</strong> Please swing by any time between 2–7pm — no strict schedule.
-                </p>
+                <p>Please swing by any time between 2–7pm — no strict schedule.</p>
                 <p>Party food + refreshments will be taken care of</p>
-                <p>
-                  <strong>Note:</strong> This is not a surprise… Magda knows and she&apos;s hyped!
-                </p>
+                <p>This is not a surprise… Magda knows and she&apos;s hyped!</p>
               </div>
             </>
           )}
