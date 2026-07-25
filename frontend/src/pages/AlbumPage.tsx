@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { AlbumPaginationControls } from '../components/AlbumPaginationControls'
 import { PhotoLightbox } from '../components/PhotoLightbox'
+import { useAlbumPagination } from '../hooks/useAlbumPagination'
 import type { Photo } from '../types'
 
 export function AlbumPage() {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const pagination = useAlbumPagination(photos, 15)
 
   useEffect(() => {
     api
@@ -27,23 +30,49 @@ export function AlbumPage() {
       {photos.length === 0 ? (
         <p className="empty panel">No approved photos yet — check back soon.</p>
       ) : (
-        <div className="photo-grid guest-photo-grid">
-          {photos.map((p, i) => (
-            <button
-              key={p.id}
-              type="button"
-              className="photo-tile"
-              style={{ border: 'none', padding: 0, cursor: 'pointer', animationDelay: `${i * 40}ms` }}
-              onClick={() => setActiveIndex(i)}
-            >
-              <img src={p.url || ''} alt={p.caption || 'Album photo'} />
-              <div className="photo-meta">
-                <div>{p.uploader_name}</div>
-                {p.caption && <div>{p.caption}</div>}
-              </div>
-            </button>
-          ))}
-        </div>
+        <>
+          <AlbumPaginationControls
+            pageSize={pagination.pageSize}
+            page={pagination.page}
+            pageCount={pagination.pageCount}
+            total={pagination.total}
+            onPageSizeChange={pagination.changePageSize}
+            onPageChange={pagination.goToPage}
+          />
+          <div className="photo-grid guest-photo-grid">
+            {pagination.pageItems.map((p, i) => {
+              const globalIndex = pagination.pageStartIndex + i
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="photo-tile"
+                  style={{
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    animationDelay: `${i * 40}ms`,
+                  }}
+                  onClick={() => setActiveIndex(globalIndex)}
+                >
+                  <img src={p.url || ''} alt={p.caption || 'Album photo'} />
+                  <div className="photo-meta">
+                    <div>{p.uploader_name}</div>
+                    {p.caption && <div>{p.caption}</div>}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <AlbumPaginationControls
+            pageSize={pagination.pageSize}
+            page={pagination.page}
+            pageCount={pagination.pageCount}
+            total={pagination.total}
+            onPageSizeChange={pagination.changePageSize}
+            onPageChange={pagination.goToPage}
+          />
+        </>
       )}
 
       {activeIndex !== null && (
