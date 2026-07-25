@@ -22,9 +22,9 @@ class Settings(BaseSettings):
     s3_prefix: str = "photos/"
     aws_region: str = "us-east-1"
 
-    # iCloud SMTP (app-specific password). From/to default to the same address.
+    # iCloud SMTP (app-specific password). MAIL_TO accepts comma-separated recipients.
     mail_from: str = "sdowling@factorydata.ca"
-    mail_to: str = "sdowling@factorydata.ca"
+    mail_to: str = "sdowling@factorydata.ca,magda.leblanc@gmail.com"
     smtp_host: str = "smtp.mail.me.com"
     smtp_port: int = 587
     smtp_username: str = "sdowling@factorydata.ca"
@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def mail_to_list(self) -> list[str]:
+        return [addr.strip() for addr in self.mail_to.split(",") if addr.strip()]
 
     def validate_for_runtime(self) -> None:
         if not self.is_production:

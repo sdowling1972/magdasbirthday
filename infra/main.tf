@@ -241,7 +241,7 @@ resource "aws_apprunner_service" "api" {
           PARTY_LOCATION    = "38 Bowcott Cres., London"
           PARTY_DESCRIPTION = "Join us to celebrate Magda!"
           MAIL_FROM         = "sdowling@factorydata.ca"
-          MAIL_TO           = "sdowling@factorydata.ca"
+          MAIL_TO           = "sdowling@factorydata.ca,magda.leblanc@gmail.com"
           SMTP_HOST         = "smtp.mail.me.com"
           SMTP_PORT         = "587"
           SMTP_USERNAME     = "sdowling@factorydata.ca"

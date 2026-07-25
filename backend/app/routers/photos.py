@@ -68,7 +68,7 @@ async def upload_photo(
     invite: Invite = Depends(require_invite_code),
     db: Session = Depends(get_db),
 ) -> PhotoOut:
-    limiter.hit(f"photo-upload:{invite.id}:{client_ip(request)}", limit=30, window_seconds=3600)
+    limiter.hit(f"photo-upload:{invite.id}:{client_ip(request)}", limit=100, window_seconds=3600)
 
     content_type = file.content_type or "application/octet-stream"
     if content_type not in ALLOWED_TYPES:

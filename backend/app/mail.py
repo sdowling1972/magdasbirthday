@@ -29,10 +29,15 @@ def send_email(subject: str, body: str) -> None:
         logger.warning("Skipping email %r — SMTP_PASSWORD is not configured", subject)
         return
 
+    recipients = settings.mail_to_list
+    if not recipients:
+        logger.warning("Skipping email %r — MAIL_TO has no recipients", subject)
+        return
+
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = settings.mail_from
-    msg["To"] = settings.mail_to
+    msg["To"] = ", ".join(recipients)
     msg.set_content(body)
 
     try:
@@ -43,7 +48,7 @@ def send_email(subject: str, body: str) -> None:
             smtp.ehlo()
             smtp.login(settings.smtp_username, settings.smtp_password)
             smtp.send_message(msg)
-        logger.info("Sent email %r to %s", subject, settings.mail_to)
+        logger.info("Sent email %r to %s", subject, ", ".join(recipients))
     except Exception:
         # Never fail the guest request because mail failed
         logger.exception("Failed to send email %r", subject)
