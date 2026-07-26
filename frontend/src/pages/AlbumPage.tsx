@@ -8,6 +8,7 @@ import type { Photo } from '../types'
 export function AlbumPage() {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const pagination = useAlbumPagination(photos, 15)
 
@@ -16,6 +17,7 @@ export function AlbumPage() {
       .getAlbum()
       .then(setPhotos)
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load album'))
+      .finally(() => setLoading(false))
   }, [])
 
   return (
@@ -27,7 +29,12 @@ export function AlbumPage() {
 
       {error && <p className="error">{error}</p>}
 
-      {photos.length === 0 ? (
+      {loading ? (
+        <div className="loading-state panel" role="status" aria-live="polite">
+          <span className="spinner" aria-hidden="true" />
+          <p>Loading photos…</p>
+        </div>
+      ) : photos.length === 0 ? (
         <p className="empty panel">No approved photos yet — check back soon.</p>
       ) : (
         <>
