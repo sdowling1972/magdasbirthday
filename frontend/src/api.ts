@@ -207,9 +207,13 @@ export const api = {
   getAlbum: (page = 1, pageSize = 15) =>
     request<PhotoPage>(`/api/photos/album?page=${page}&page_size=${pageSize}`, { invite: true }),
 
-  adminPhotos: (status?: PhotoStatus) => {
-    const q = status ? `?status_filter=${status}` : ''
-    return request<Photo[]>(`/api/photos/admin${q}`, { admin: true })
+  adminPhotos: (status?: PhotoStatus, page = 1, pageSize = 15) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    })
+    if (status) params.set('status_filter', status)
+    return request<PhotoPage>(`/api/photos/admin?${params}`, { admin: true })
   },
 
   adminAlbum: (page = 1, pageSize = 15) =>

@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { AlbumPaginationControls } from '../components/AlbumPaginationControls'
+import type { PageSize } from '../hooks/useAlbumPagination'
 import type { Photo, PhotoStatus } from '../types'
+
+const ALL_PAGE_SIZE = 2000
 
 type Draft = {
   uploader_name: string
@@ -31,24 +35,58 @@ function isDirty(draft: Draft, photo: Photo): boolean {
 
 export function AdminPhotosPage() {
   const [photos, setPhotos] = useState<Photo[]>([])
+  const [total, setTotal] = useState(0)
   const [filter, setFilter] = useState<PhotoStatus | ''>('pending')
+  const [pageSize, setPageSize] = useState<PageSize>(15)
+  const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
 
-  async function load() {
+  const requestSize = pageSize === 'all' ? ALL_PAGE_SIZE : pageSize
+  const requestPage = pageSize === 'all' ? 1 : page
+  const pageCount =
+    pageSize === 'all' || total === 0 ? 1 : Math.max(1, Math.ceil(total / pageSize))
+  const safePage = Math.min(page, pageCount)
+
+  const load = useCallback(async () => {
+    setLoading(true)
     try {
-      const next = await api.adminPhotos(filter || undefined)
-      setPhotos(next)
-      setDrafts(Object.fromEntries(next.map((p) => [p.id, draftFromPhoto(p)])))
+      const next = await api.adminPhotos(filter || undefined, requestPage, requestSize)
+      setPhotos(next.items)
+      setTotal(next.total)
+      setDrafts(Object.fromEntries(next.items.map((p) => [p.id, draftFromPhoto(p)])))
+      if (pageSize !== 'all' && next.page !== requestPage) {
+        setPage(next.page)
+      }
       setError('')
     } catch (err) {
+      setPhotos([])
+      setTotal(0)
+      setDrafts({})
       setError(err instanceof Error ? err.message : 'Failed to load photos')
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [filter, requestPage, requestSize, pageSize])
 
   useEffect(() => {
-    load()
-  }, [filter])
+    void load()
+  }, [load])
+
+  function changeFilter(next: PhotoStatus | '') {
+    setFilter(next)
+    setPage(1)
+  }
+
+  function changePageSize(next: PageSize) {
+    setPageSize(next)
+    setPage(1)
+  }
+
+  function goToPage(next: number) {
+    setPage(Math.min(Math.max(1, next), pageCount))
+  }
 
   function updateDraft(id: string, patch: Partial<Draft>) {
     setDrafts((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }))
@@ -106,7 +144,10 @@ export function AdminPhotosPage() {
           <Link to="/admin/album" className="btn btn-secondary">
             View album
           </Link>
-          <select value={filter} onChange={(e) => setFilter(e.target.value as PhotoStatus | '')}>
+          <select
+            value={filter}
+            onChange={(e) => changeFilter(e.target.value as PhotoStatus | '')}
+          >
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
@@ -117,77 +158,117 @@ export function AdminPhotosPage() {
 
       {error && <p className="error">{error}</p>}
 
-      {photos.length === 0 ? (
+      {loading && photos.length === 0 && total === 0 && !error ? (
+        <div className="loading-state panel" role="status" aria-live="polite">
+          <span className="spinner" aria-hidden="true" />
+          <p>Loading photos…</p>
+        </div>
+      ) : total === 0 && !loading ? (
         <p className="empty panel">No photos in this filter.</p>
       ) : (
-        <div className="photo-grid">
-          {photos.map((p) => {
-            const draft = drafts[p.id]
-            if (!draft) return null
-            const dirty = isDirty(draft, p)
+        <>
+          <AlbumPaginationControls
+            pageSize={pageSize}
+            page={safePage}
+            pageCount={pageCount}
+            total={total}
+            onPageSizeChange={changePageSize}
+            onPageChange={goToPage}
+          />
+          {loading ? (
+            <div className="loading-state panel" role="status" aria-live="polite">
+              <span className="spinner" aria-hidden="true" />
+              <p>Loading photos…</p>
+            </div>
+          ) : (
+            <div className="photo-grid">
+              {photos.map((p) => {
+                const draft = drafts[p.id]
+                if (!draft) return null
+                const dirty = isDirty(draft, p)
 
-            return (
-              <div key={p.id} className="stack panel" style={{ padding: '0.85rem' }}>
-                <div className="photo-tile">
-                  <img src={p.url || ''} alt={p.caption || p.original_filename} />
-                  <div className="photo-meta">
-                    <div>{p.uploader_name}</div>
-                    {p.caption && <div>{p.caption}</div>}
-                    <div className="muted">{p.original_filename}</div>
+                return (
+                  <div key={p.id} className="stack panel" style={{ padding: '0.85rem' }}>
+                    <div className="photo-tile">
+                      <img
+                        src={p.url || ''}
+                        alt={p.caption || p.original_filename}
+                        className="is-loaded"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <div className="photo-meta">
+                        <div>{p.uploader_name}</div>
+                        {p.caption && <div>{p.caption}</div>}
+                        <div className="muted">{p.original_filename}</div>
+                      </div>
+                    </div>
+
+                    <label className="stack" style={{ gap: '0.35rem' }}>
+                      <span className="muted">Display name</span>
+                      <input
+                        type="text"
+                        value={draft.uploader_name}
+                        onChange={(e) => updateDraft(p.id, { uploader_name: e.target.value })}
+                        placeholder="Who shared this photo"
+                      />
+                    </label>
+
+                    <label className="stack" style={{ gap: '0.35rem' }}>
+                      <span className="muted">Caption</span>
+                      <textarea
+                        rows={2}
+                        value={draft.caption}
+                        onChange={(e) => updateDraft(p.id, { caption: e.target.value })}
+                        placeholder="Optional caption shown on the album"
+                      />
+                    </label>
+
+                    <label className="stack" style={{ gap: '0.35rem' }}>
+                      <span className="muted">Status</span>
+                      <select
+                        value={draft.status}
+                        onChange={(e) => updateDraft(p.id, { status: e.target.value as PhotoStatus })}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </label>
+
+                    {draft.error && <p className="error">{draft.error}</p>}
+
+                    <div className="inline-actions">
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={!dirty || draft.saving}
+                        onClick={() => save(p.id)}
+                      >
+                        {draft.saving ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={() => remove(p.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                </div>
-
-                <label className="stack" style={{ gap: '0.35rem' }}>
-                  <span className="muted">Display name</span>
-                  <input
-                    type="text"
-                    value={draft.uploader_name}
-                    onChange={(e) => updateDraft(p.id, { uploader_name: e.target.value })}
-                    placeholder="Who shared this photo"
-                  />
-                </label>
-
-                <label className="stack" style={{ gap: '0.35rem' }}>
-                  <span className="muted">Caption</span>
-                  <textarea
-                    rows={2}
-                    value={draft.caption}
-                    onChange={(e) => updateDraft(p.id, { caption: e.target.value })}
-                    placeholder="Optional caption shown on the album"
-                  />
-                </label>
-
-                <label className="stack" style={{ gap: '0.35rem' }}>
-                  <span className="muted">Status</span>
-                  <select
-                    value={draft.status}
-                    onChange={(e) => updateDraft(p.id, { status: e.target.value as PhotoStatus })}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </label>
-
-                {draft.error && <p className="error">{draft.error}</p>}
-
-                <div className="inline-actions">
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={!dirty || draft.saving}
-                    onClick={() => save(p.id)}
-                  >
-                    {draft.saving ? 'Saving…' : 'Save'}
-                  </button>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => remove(p.id)}>
-                    Delete
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+                )
+              })}
+            </div>
+          )}
+          <AlbumPaginationControls
+            pageSize={pageSize}
+            page={safePage}
+            pageCount={pageCount}
+            total={total}
+            onPageSizeChange={changePageSize}
+            onPageChange={goToPage}
+          />
+        </>
       )}
     </div>
   )

@@ -171,17 +171,20 @@ def public_album(
     )
 
 
-@router.get("/admin", response_model=list[PhotoOut])
+@router.get("/admin", response_model=PhotoPage)
 def admin_list_photos(
     status_filter: PhotoStatus | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(15, ge=1, le=2000),
     _: str = Depends(verify_admin_token),
     db: Session = Depends(get_db),
-) -> list[PhotoOut]:
-    stmt = select(Photo).order_by(Photo.created_at.desc())
-    if status_filter:
-        stmt = stmt.where(Photo.status == status_filter)
-    photos = db.scalars(stmt).all()
-    return [serialize_photo(p) for p in photos]
+) -> PhotoPage:
+    return paginate_photos(
+        db,
+        status_filter=status_filter,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/admin/album", response_model=PhotoPage)
