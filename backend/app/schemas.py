@@ -125,6 +125,13 @@ class PhotoOut(BaseModel):
     url: str | None = None
 
 
+class PhotoPage(BaseModel):
+    items: list[PhotoOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class PhotoAdminUpdate(BaseModel):
     """Partial photo update — every field is optional."""
 

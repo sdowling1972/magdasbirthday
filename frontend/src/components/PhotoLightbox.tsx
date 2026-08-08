@@ -7,16 +7,29 @@ const SWIPE_THRESHOLD_PX = 50
 type PhotoLightboxProps = {
   photos: Photo[]
   activeIndex: number
+  /** Global offset of the first photo in `photos` (for paginated albums). */
+  indexOffset?: number
+  /** Global album total; defaults to `photos.length`. */
+  totalCount?: number
   onClose: () => void
   onChangeIndex: (index: number) => void
 }
 
-export function PhotoLightbox({ photos, activeIndex, onClose, onChangeIndex }: PhotoLightboxProps) {
+export function PhotoLightbox({
+  photos,
+  activeIndex,
+  indexOffset = 0,
+  totalCount,
+  onClose,
+  onChangeIndex,
+}: PhotoLightboxProps) {
   const active = photos[activeIndex]
   const touchStartX = useRef<number | null>(null)
   const touchStartY = useRef<number | null>(null)
   const canPrev = activeIndex > 0
   const canNext = activeIndex < photos.length - 1
+  const displayTotal = totalCount ?? photos.length
+  const displayIndex = indexOffset + activeIndex + 1
 
   function showPrev() {
     if (activeIndex > 0) onChangeIndex(activeIndex - 1)
@@ -86,7 +99,7 @@ export function PhotoLightbox({ photos, activeIndex, onClose, onChangeIndex }: P
           {active.caption ? ` — ${active.caption}` : ''}
         </p>
         <p className="album-lightbox-count muted">
-          {activeIndex + 1} / {photos.length}
+          {displayIndex} / {displayTotal}
         </p>
         <button type="button" className="btn btn-secondary" onClick={onClose}>
           Close

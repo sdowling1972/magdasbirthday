@@ -6,6 +6,7 @@ import type {
   InvitePublic,
   PartyInfo,
   Photo,
+  PhotoPage,
   PhotoStatus,
   Guest,
 } from './types'
@@ -203,12 +204,16 @@ export const api = {
   uploadPhoto: (form: FormData) =>
     request<Photo>('/api/photos/mine', { method: 'POST', body: form, invite: true }),
 
-  getAlbum: () => request<Photo[]>('/api/photos/album', { invite: true }),
+  getAlbum: (page = 1, pageSize = 15) =>
+    request<PhotoPage>(`/api/photos/album?page=${page}&page_size=${pageSize}`, { invite: true }),
 
   adminPhotos: (status?: PhotoStatus) => {
     const q = status ? `?status_filter=${status}` : ''
     return request<Photo[]>(`/api/photos/admin${q}`, { admin: true })
   },
+
+  adminAlbum: (page = 1, pageSize = 15) =>
+    request<PhotoPage>(`/api/photos/admin/album?page=${page}&page_size=${pageSize}`, { admin: true }),
 
   updatePhoto: (
     id: string,

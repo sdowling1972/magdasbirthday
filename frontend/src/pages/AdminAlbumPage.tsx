@@ -1,25 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api'
 import { AlbumPaginationControls } from '../components/AlbumPaginationControls'
 import { PhotoLightbox } from '../components/PhotoLightbox'
-import { useAlbumPagination } from '../hooks/useAlbumPagination'
-import type { Photo } from '../types'
+import { PhotoTile } from '../components/PhotoTile'
+import { usePagedAlbum } from '../hooks/usePagedAlbum'
+
+function AlbumSkeletonGrid({ count }: { count: number }) {
+  return (
+    <div className="photo-grid" aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="photo-tile photo-tile-skeleton">
+          <div className="photo-tile-placeholder">
+            <span className="spinner" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function AdminAlbumPage() {
-  const [photos, setPhotos] = useState<Photo[]>([])
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const pagination = useAlbumPagination(photos, 15)
+  const album = usePagedAlbum('admin', 15)
+  const skeletonCount = album.pageSize === 'all' ? 15 : album.pageSize
 
-  useEffect(() => {
-    api
-      .adminPhotos('approved')
-      .then(setPhotos)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load album'))
-      .finally(() => setLoading(false))
-  }, [])
+  function changePageSize(size: Parameters<typeof album.changePageSize>[0]) {
+    setActiveIndex(null)
+    album.changePageSize(size)
+  }
+
+  function goToPage(page: number) {
+    setActiveIndex(null)
+    album.goToPage(page)
+  }
 
   return (
     <div>
@@ -35,65 +48,53 @@ export function AdminAlbumPage() {
         </Link>
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {album.error && <p className="error">{album.error}</p>}
 
-      {loading ? (
-        <div className="loading-state panel" role="status" aria-live="polite">
-          <span className="spinner" aria-hidden="true" />
-          <p>Loading photos…</p>
-        </div>
-      ) : photos.length === 0 ? (
+      {album.loading && album.photos.length === 0 && album.total === 0 && !album.error ? (
+        <AlbumSkeletonGrid count={skeletonCount} />
+      ) : album.total === 0 && !album.loading ? (
         <p className="empty panel">No approved photos yet.</p>
       ) : (
         <>
           <AlbumPaginationControls
-            pageSize={pagination.pageSize}
-            page={pagination.page}
-            pageCount={pagination.pageCount}
-            total={pagination.total}
-            onPageSizeChange={pagination.changePageSize}
-            onPageChange={pagination.goToPage}
+            pageSize={album.pageSize}
+            page={album.page}
+            pageCount={album.pageCount}
+            total={album.total}
+            onPageSizeChange={changePageSize}
+            onPageChange={goToPage}
           />
-          <div className="photo-grid">
-            {pagination.pageItems.map((p, i) => {
-              const globalIndex = pagination.pageStartIndex + i
-              return (
-                <button
+          {album.loading ? (
+            <AlbumSkeletonGrid count={skeletonCount} />
+          ) : (
+            <div className="photo-grid">
+              {album.photos.map((p, i) => (
+                <PhotoTile
                   key={p.id}
-                  type="button"
-                  className="photo-tile"
-                  style={{
-                    border: 'none',
-                    padding: 0,
-                    cursor: 'pointer',
-                    animationDelay: `${i * 40}ms`,
-                  }}
-                  onClick={() => setActiveIndex(globalIndex)}
-                >
-                  <img src={p.url || ''} alt={p.caption || 'Album photo'} />
-                  <div className="photo-meta">
-                    <div>{p.uploader_name}</div>
-                    {p.caption && <div>{p.caption}</div>}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
+                  photo={p}
+                  animationDelay={`${i * 40}ms`}
+                  onClick={() => setActiveIndex(i)}
+                />
+              ))}
+            </div>
+          )}
           <AlbumPaginationControls
-            pageSize={pagination.pageSize}
-            page={pagination.page}
-            pageCount={pagination.pageCount}
-            total={pagination.total}
-            onPageSizeChange={pagination.changePageSize}
-            onPageChange={pagination.goToPage}
+            pageSize={album.pageSize}
+            page={album.page}
+            pageCount={album.pageCount}
+            total={album.total}
+            onPageSizeChange={changePageSize}
+            onPageChange={goToPage}
           />
         </>
       )}
 
       {activeIndex !== null && (
         <PhotoLightbox
-          photos={photos}
+          photos={album.photos}
           activeIndex={activeIndex}
+          indexOffset={album.pageStartIndex}
+          totalCount={album.total}
           onClose={() => setActiveIndex(null)}
           onChangeIndex={setActiveIndex}
         />

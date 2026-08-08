@@ -71,6 +71,13 @@ export interface Photo {
   url: string | null
 }
 
+export interface PhotoPage {
+  items: Photo[]
+  total: number
+  page: number
+  page_size: number
+}
+
 export interface DashboardStats {
   invite_count: number
   guest_count: number

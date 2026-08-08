@@ -633,16 +633,47 @@ th {
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 400ms ease;
+  opacity: 0;
+  transition: transform 400ms ease, opacity 280ms ease;
 }
 
-.photo-tile:hover img {
+.photo-tile img.is-loaded {
+  opacity: 1;
+}
+
+.photo-tile:hover img.is-loaded {
   transform: scale(1.04);
+}
+
+.photo-tile-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(238, 242, 246, 0.95), rgba(232, 213, 181, 0.35));
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  z-index: 0;
+}
+
+.photo-tile-error {
+  z-index: 1;
+}
+
+.photo-tile-skeleton {
+  animation: none;
+  pointer-events: none;
+}
+
+.photo-tile img {
+  position: relative;
+  z-index: 1;
 }
 
 .photo-meta {
   position: absolute;
   inset: auto 0 0;
+  z-index: 2;
   padding: 0.75rem;
   background: linear-gradient(transparent, rgba(26, 42, 58, 0.75));
   color: white;

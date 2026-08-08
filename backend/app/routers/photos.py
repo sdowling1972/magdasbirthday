@@ -1,11 +1,11 @@
 import uuid
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import ALGORITHM, verify_admin_token
@@ -16,7 +16,7 @@ from app.models import Invite, Photo, PhotoStatus
 from app.notifications import notify_photo_upload
 from app.notify_once import claim_notification
 from app.rate_limit import client_ip, limiter
-from app.schemas import PhotoAdminUpdate, PhotoOut
+from app.schemas import PhotoAdminUpdate, PhotoOut, PhotoPage
 from app.services import get_invite_by_token
 from app.sessions import ADMIN_COOKIE
 from app.storage import get_storage
@@ -44,6 +44,32 @@ def serialize_photo(photo: Photo) -> PhotoOut:
         status=photo.status,
         created_at=photo.created_at,
         url=photo_url(photo),
+    )
+
+
+def paginate_photos(
+    db: Session,
+    *,
+    status_filter: PhotoStatus | None,
+    page: int,
+    page_size: int,
+) -> PhotoPage:
+    filters = [Photo.status == status_filter] if status_filter is not None else []
+    total = db.scalar(select(func.count()).select_from(Photo).where(*filters)) or 0
+    page_count = max(1, (total + page_size - 1) // page_size) if total else 1
+    safe_page = min(page, page_count)
+    photos = db.scalars(
+        select(Photo)
+        .where(*filters)
+        .order_by(Photo.created_at.desc())
+        .offset((safe_page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return PhotoPage(
+        items=[serialize_photo(p) for p in photos],
+        total=total,
+        page=safe_page,
+        page_size=page_size,
     )
 
 
@@ -130,15 +156,19 @@ def list_invite_photos(
     return [serialize_photo(p) for p in photos]
 
 
-@router.get("/album", response_model=list[PhotoOut])
+@router.get("/album", response_model=PhotoPage)
 def public_album(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(15, ge=1, le=2000),
     _: Invite = Depends(require_invite_code),
     db: Session = Depends(get_db),
-) -> list[PhotoOut]:
-    photos = db.scalars(
-        select(Photo).where(Photo.status == PhotoStatus.approved).order_by(Photo.created_at.desc())
-    ).all()
-    return [serialize_photo(p) for p in photos]
+) -> PhotoPage:
+    return paginate_photos(
+        db,
+        status_filter=PhotoStatus.approved,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/admin", response_model=list[PhotoOut])
@@ -152,6 +182,21 @@ def admin_list_photos(
         stmt = stmt.where(Photo.status == status_filter)
     photos = db.scalars(stmt).all()
     return [serialize_photo(p) for p in photos]
+
+
+@router.get("/admin/album", response_model=PhotoPage)
+def admin_album(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(15, ge=1, le=2000),
+    _: str = Depends(verify_admin_token),
+    db: Session = Depends(get_db),
+) -> PhotoPage:
+    return paginate_photos(
+        db,
+        status_filter=PhotoStatus.approved,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.patch("/admin/{photo_id}", response_model=PhotoOut)
