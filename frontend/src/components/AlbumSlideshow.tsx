@@ -21,13 +21,29 @@ function preloadUrl(url: string | null | undefined, cache: Set<string>) {
   img.src = url
 }
 
+function shufflePhotos(photos: Photo[]): Photo[] {
+  const next = [...photos]
+  for (let i = next.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[next[i], next[j]] = [next[j], next[i]]
+  }
+  return next
+}
+
+/** Rotate so `currentId` is first, keeping relative shuffle order. */
+function rotateToCurrent(photos: Photo[], currentId: string | undefined): Photo[] {
+  if (!currentId || photos.length === 0) return photos
+  const idx = photos.findIndex((p) => p.id === currentId)
+  if (idx <= 0) return photos
+  return [...photos.slice(idx), ...photos.slice(0, idx)]
+}
+
 export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const orderedRef = useRef<Photo[]>([])
   const hideTimer = useRef<number | null>(null)
   const indexRef = useRef(0)
   const photosRef = useRef<Photo[]>([])
-  const randomRef = useRef(false)
   const plannedNextRef = useRef<number | null>(null)
   const loadedUrlsRef = useRef(new Set<string>())
   const closedRef = useRef(false)
@@ -46,7 +62,6 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
 
   indexRef.current = index
   photosRef.current = photos
-  randomRef.current = random
   plannedNextRef.current = plannedNext
   onCloseRef.current = onClose
 
@@ -56,15 +71,10 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
     hideTimer.current = window.setTimeout(() => setControlsVisible(false), 3500)
   }
 
-  function pickNextIndex(fromIndex: number): number {
+  function nextIndex(fromIndex: number): number {
     const list = photosRef.current
     if (list.length <= 1) return fromIndex
-    if (!randomRef.current) return (fromIndex + 1) % list.length
-    let next = Math.floor(Math.random() * list.length)
-    while (next === fromIndex) {
-      next = Math.floor(Math.random() * list.length)
-    }
-    return next
+    return (fromIndex + 1) % list.length
   }
 
   function planAndPreload(fromIndex: number) {
@@ -73,25 +83,36 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
       setPlannedNext(null)
       return
     }
-    const next = pickNextIndex(fromIndex)
+    const next = nextIndex(fromIndex)
     setPlannedNext(next)
     preloadUrl(list[next]?.url, loadedUrlsRef.current)
-    // Warm the one after that for sequential playback.
-    if (!randomRef.current && list.length > 2) {
-      preloadUrl(list[(next + 1) % list.length]?.url, loadedUrlsRef.current)
+    if (list.length > 2) {
+      preloadUrl(list[nextIndex(next)]?.url, loadedUrlsRef.current)
     }
   }
 
-  function showIndex(nextIndex: number) {
+  function showIndex(nextIdx: number) {
     const list = photosRef.current
-    const url = list[nextIndex]?.url
-    setIndex(nextIndex)
+    const url = list[nextIdx]?.url
+    setIndex(nextIdx)
     if (url && loadedUrlsRef.current.has(url)) {
       setImageLoaded(true)
     } else {
       setImageLoaded(false)
     }
-    planAndPreload(nextIndex)
+    planAndPreload(nextIdx)
+  }
+
+  function setPlaylist(nextPhotos: Photo[], startIndex: number) {
+    photosRef.current = nextPhotos
+    setPhotos(nextPhotos)
+    indexRef.current = startIndex
+    setIndex(startIndex)
+    const url = nextPhotos[startIndex]?.url
+    if (url && loadedUrlsRef.current.has(url)) {
+      setImageLoaded(true)
+    }
+    planAndPreload(startIndex)
   }
 
   function advance(step: number) {
@@ -99,7 +120,7 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
     if (list.length === 0) return
 
     if (step === 1) {
-      const next = plannedNextRef.current ?? pickNextIndex(indexRef.current)
+      const next = plannedNextRef.current ?? nextIndex(indexRef.current)
       showIndex(next)
       return
     }
@@ -216,18 +237,17 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
 
   function applyRandom(enabled: boolean) {
     setRandom(enabled)
-    randomRef.current = enabled
-    if (!enabled) {
-      const base = orderedRef.current
-      const currentId = photosRef.current[indexRef.current]?.id
-      photosRef.current = [...base]
-      setPhotos([...base])
-      const nextIndex = currentId ? base.findIndex((p) => p.id === currentId) : 0
-      const safe = nextIndex < 0 ? 0 : nextIndex
-      setIndex(safe)
-      indexRef.current = safe
+    const currentId = photosRef.current[indexRef.current]?.id
+    if (enabled) {
+      const shuffled = rotateToCurrent(shufflePhotos(orderedRef.current), currentId)
+      setPlaylist(shuffled, 0)
+      return
     }
-    planAndPreload(indexRef.current)
+    const chronological = [...orderedRef.current]
+    const nextIndexInOrder = currentId
+      ? chronological.findIndex((p) => p.id === currentId)
+      : 0
+    setPlaylist(chronological, nextIndexInOrder < 0 ? 0 : nextIndexInOrder)
   }
 
   const active = photos[index]
@@ -301,7 +321,7 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
             </p>
             <p className="album-slideshow-count">
               {index + 1} / {photos.length}
-              {random ? ' · random' : ''}
+              {random ? ' · shuffled' : ''}
             </p>
           </div>
 
