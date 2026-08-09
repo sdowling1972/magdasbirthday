@@ -970,6 +970,15 @@ th {
   place-items: center;
 }
 
+.album-slideshow-preload {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 .album-slideshow-caption {
   text-align: center;
   padding: 0.35rem 1.25rem 0.75rem;

@@ -11,6 +11,16 @@ type AlbumSlideshowProps = {
   onClose: () => void
 }
 
+function preloadUrl(url: string | null | undefined, cache: Set<string>) {
+  if (!url || cache.has(url)) return
+  const img = new Image()
+  img.decoding = 'async'
+  img.onload = () => {
+    cache.add(url)
+  }
+  img.src = url
+}
+
 export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const orderedRef = useRef<Photo[]>([])
@@ -18,22 +28,26 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
   const indexRef = useRef(0)
   const photosRef = useRef<Photo[]>([])
   const randomRef = useRef(false)
+  const plannedNextRef = useRef<number | null>(null)
+  const loadedUrlsRef = useRef(new Set<string>())
   const closedRef = useRef(false)
   const onCloseRef = useRef(onClose)
 
   const [photos, setPhotos] = useState<Photo[]>([])
   const [index, setIndex] = useState(0)
+  const [plannedNext, setPlannedNext] = useState<number | null>(null)
   const [delay, setDelay] = useState<SlideshowDelay>(5)
   const [random, setRandom] = useState(false)
   const [playing, setPlaying] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [controlsVisible, setControlsVisible] = useState(true)
+  const [controlsVisible, setControlsVisible] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
 
   indexRef.current = index
   photosRef.current = photos
   randomRef.current = random
+  plannedNextRef.current = plannedNext
   onCloseRef.current = onClose
 
   function revealControls() {
@@ -42,20 +56,55 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
     hideTimer.current = window.setTimeout(() => setControlsVisible(false), 3500)
   }
 
+  function pickNextIndex(fromIndex: number): number {
+    const list = photosRef.current
+    if (list.length <= 1) return fromIndex
+    if (!randomRef.current) return (fromIndex + 1) % list.length
+    let next = Math.floor(Math.random() * list.length)
+    while (next === fromIndex) {
+      next = Math.floor(Math.random() * list.length)
+    }
+    return next
+  }
+
+  function planAndPreload(fromIndex: number) {
+    const list = photosRef.current
+    if (list.length === 0) {
+      setPlannedNext(null)
+      return
+    }
+    const next = pickNextIndex(fromIndex)
+    setPlannedNext(next)
+    preloadUrl(list[next]?.url, loadedUrlsRef.current)
+    // Warm the one after that for sequential playback.
+    if (!randomRef.current && list.length > 2) {
+      preloadUrl(list[(next + 1) % list.length]?.url, loadedUrlsRef.current)
+    }
+  }
+
+  function showIndex(nextIndex: number) {
+    const list = photosRef.current
+    const url = list[nextIndex]?.url
+    setIndex(nextIndex)
+    if (url && loadedUrlsRef.current.has(url)) {
+      setImageLoaded(true)
+    } else {
+      setImageLoaded(false)
+    }
+    planAndPreload(nextIndex)
+  }
+
   function advance(step: number) {
     const list = photosRef.current
     if (list.length === 0) return
 
-    if (randomRef.current && step === 1 && list.length > 1) {
-      let next = Math.floor(Math.random() * list.length)
-      while (next === indexRef.current) {
-        next = Math.floor(Math.random() * list.length)
-      }
-      setIndex(next)
-    } else {
-      setIndex((i) => (i + step + list.length) % list.length)
+    if (step === 1) {
+      const next = plannedNextRef.current ?? pickNextIndex(indexRef.current)
+      showIndex(next)
+      return
     }
-    revealControls()
+
+    showIndex((indexRef.current + step + list.length) % list.length)
   }
 
   async function closeSlideshow() {
@@ -80,8 +129,16 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
       .then((data) => {
         if (cancelled) return
         orderedRef.current = data.items
+        photosRef.current = data.items
         setPhotos(data.items)
         setIndex(0)
+        const firstUrl = data.items[0]?.url
+        if (firstUrl) preloadUrl(firstUrl, loadedUrlsRef.current)
+        if (data.items.length > 0) {
+          const next = data.items.length > 1 ? 1 : 0
+          setPlannedNext(next)
+          preloadUrl(data.items[next]?.url, loadedUrlsRef.current)
+        }
       })
       .catch((err) => {
         if (cancelled) return
@@ -127,10 +184,12 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
       if (e.key === 'Escape') {
         e.preventDefault()
         void closeSlideshow()
-      } else if (e.key === ' ' || e.key === 'k') {
+        return
+      }
+      revealControls()
+      if (e.key === ' ' || e.key === 'k') {
         e.preventDefault()
         setPlaying((p) => !p)
-        revealControls()
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
         advance(1)
@@ -150,22 +209,6 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
   }, [playing, photos.length, loading, delay, index])
 
   useEffect(() => {
-    setImageLoaded(false)
-  }, [index, photos])
-
-  useEffect(() => {
-    if (photos.length < 2) return
-    const nextIndex = random
-      ? Math.floor(Math.random() * photos.length)
-      : (index + 1) % photos.length
-    const next = photos[nextIndex]
-    if (!next?.url) return
-    const img = new Image()
-    img.src = next.url
-  }, [index, photos, random])
-
-  useEffect(() => {
-    revealControls()
     return () => {
       if (hideTimer.current) window.clearTimeout(hideTimer.current)
     }
@@ -173,17 +216,22 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
 
   function applyRandom(enabled: boolean) {
     setRandom(enabled)
+    randomRef.current = enabled
     if (!enabled) {
       const base = orderedRef.current
       const currentId = photosRef.current[indexRef.current]?.id
+      photosRef.current = [...base]
       setPhotos([...base])
       const nextIndex = currentId ? base.findIndex((p) => p.id === currentId) : 0
-      setIndex(nextIndex < 0 ? 0 : nextIndex)
+      const safe = nextIndex < 0 ? 0 : nextIndex
+      setIndex(safe)
+      indexRef.current = safe
     }
-    revealControls()
+    planAndPreload(indexRef.current)
   }
 
   const active = photos[index]
+  const preloadPhoto = plannedNext != null ? photos[plannedNext] : null
 
   return (
     <div
@@ -216,7 +264,19 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
         </div>
       ) : (
         <>
-          <div className="album-slideshow-stage" key={active.id}>
+          {preloadPhoto?.url && preloadPhoto.id !== active.id && (
+            <img
+              src={preloadPhoto.url}
+              alt=""
+              className="album-slideshow-preload"
+              aria-hidden="true"
+              onLoad={() => {
+                if (preloadPhoto.url) loadedUrlsRef.current.add(preloadPhoto.url)
+              }}
+            />
+          )}
+
+          <div className="album-slideshow-stage">
             {!imageLoaded && (
               <div className="album-slideshow-placeholder" aria-hidden="true">
                 <span className="spinner" />
@@ -227,7 +287,10 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
               alt={active.caption || 'Slideshow photo'}
               className={imageLoaded ? 'is-loaded' : undefined}
               draggable={false}
-              onLoad={() => setImageLoaded(true)}
+              onLoad={() => {
+                if (active.url) loadedUrlsRef.current.add(active.url)
+                setImageLoaded(true)
+              }}
             />
           </div>
 
@@ -246,7 +309,10 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              onClick={() => advance(-1)}
+              onClick={() => {
+                advance(-1)
+                revealControls()
+              }}
               aria-label="Previous photo"
             >
               Previous
@@ -264,7 +330,10 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              onClick={() => advance(1)}
+              onClick={() => {
+                advance(1)
+                revealControls()
+              }}
               aria-label="Next photo"
             >
               Next
@@ -291,7 +360,10 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
               <input
                 type="checkbox"
                 checked={random}
-                onChange={(e) => applyRandom(e.target.checked)}
+                onChange={(e) => {
+                  applyRandom(e.target.checked)
+                  revealControls()
+                }}
               />
               <span>Random</span>
             </label>
