@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlbumPaginationControls } from '../components/AlbumPaginationControls'
+import { AlbumSlideshow } from '../components/AlbumSlideshow'
 import { PhotoLightbox } from '../components/PhotoLightbox'
 import { PhotoTile } from '../components/PhotoTile'
 import { usePagedAlbum } from '../hooks/usePagedAlbum'
@@ -21,6 +22,7 @@ function AlbumSkeletonGrid({ count }: { count: number }) {
 
 export function AdminAlbumPage() {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+  const [slideshowOpen, setSlideshowOpen] = useState(false)
   const album = usePagedAlbum('admin', 15)
   const skeletonCount = album.pageSize === 'all' ? 15 : album.pageSize
 
@@ -43,9 +45,23 @@ export function AdminAlbumPage() {
             Approved photos as guests see them in the public album.
           </p>
         </div>
-        <Link to="/admin/photos" className="btn btn-secondary">
-          Manage photos
-        </Link>
+        <div className="inline-actions">
+          {album.total > 0 && (
+            <button
+              type="button"
+              className="btn btn-blush"
+              onClick={() => {
+                setActiveIndex(null)
+                setSlideshowOpen(true)
+              }}
+            >
+              Slideshow
+            </button>
+          )}
+          <Link to="/admin/photos" className="btn btn-secondary">
+            Manage photos
+          </Link>
+        </div>
       </div>
 
       {album.error && <p className="error">{album.error}</p>}
@@ -98,6 +114,10 @@ export function AdminAlbumPage() {
           onClose={() => setActiveIndex(null)}
           onChangeIndex={setActiveIndex}
         />
+      )}
+
+      {slideshowOpen && (
+        <AlbumSlideshow source="admin" onClose={() => setSlideshowOpen(false)} />
       )}
     </div>
   )

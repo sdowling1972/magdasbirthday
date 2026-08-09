@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AlbumPaginationControls } from '../components/AlbumPaginationControls'
+import { AlbumSlideshow } from '../components/AlbumSlideshow'
 import { PhotoLightbox } from '../components/PhotoLightbox'
 import { PhotoTile } from '../components/PhotoTile'
 import { usePagedAlbum } from '../hooks/usePagedAlbum'
@@ -20,6 +21,7 @@ function AlbumSkeletonGrid({ count, guest }: { count: number; guest?: boolean })
 
 export function AlbumPage() {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+  const [slideshowOpen, setSlideshowOpen] = useState(false)
   const album = usePagedAlbum('guest', 15)
   const skeletonCount = album.pageSize === 'all' ? 15 : album.pageSize
 
@@ -35,9 +37,23 @@ export function AlbumPage() {
 
   return (
     <div className="section guest-page">
-      <div className="section-head">
-        <h2>Photo album</h2>
-        <p>Moments with Magda, shared by friends and family.</p>
+      <div className="section-head album-section-head">
+        <div>
+          <h2>Photo album</h2>
+          <p>Moments with Magda, shared by friends and family.</p>
+        </div>
+        {album.total > 0 && (
+          <button
+            type="button"
+            className="btn btn-blush"
+            onClick={() => {
+              setActiveIndex(null)
+              setSlideshowOpen(true)
+            }}
+          >
+            Slideshow
+          </button>
+        )}
       </div>
 
       {album.error && <p className="error">{album.error}</p>}
@@ -90,6 +106,10 @@ export function AlbumPage() {
           onClose={() => setActiveIndex(null)}
           onChangeIndex={setActiveIndex}
         />
+      )}
+
+      {slideshowOpen && (
+        <AlbumSlideshow source="guest" onClose={() => setSlideshowOpen(false)} />
       )}
     </div>
   )
