@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { AlbumInviteFilter } from '../components/AlbumInviteFilter'
 import { AlbumPaginationControls } from '../components/AlbumPaginationControls'
 import type { PageSize } from '../hooks/useAlbumPagination'
 import type { Photo, PhotoStatus } from '../types'
@@ -37,6 +38,7 @@ export function AdminPhotosPage() {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [total, setTotal] = useState(0)
   const [filter, setFilter] = useState<PhotoStatus | ''>('pending')
+  const [inviteId, setInviteId] = useState<string | null>(null)
   const [pageSize, setPageSize] = useState<PageSize>(15)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -52,7 +54,7 @@ export function AdminPhotosPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const next = await api.adminPhotos(filter || undefined, requestPage, requestSize)
+      const next = await api.adminPhotos(filter || undefined, requestPage, requestSize, inviteId)
       setPhotos(next.items)
       setTotal(next.total)
       setDrafts(Object.fromEntries(next.items.map((p) => [p.id, draftFromPhoto(p)])))
@@ -68,7 +70,7 @@ export function AdminPhotosPage() {
     } finally {
       setLoading(false)
     }
-  }, [filter, requestPage, requestSize, pageSize])
+  }, [filter, inviteId, requestPage, requestSize, pageSize])
 
   useEffect(() => {
     void load()
@@ -76,6 +78,12 @@ export function AdminPhotosPage() {
 
   function changeFilter(next: PhotoStatus | '') {
     setFilter(next)
+    setInviteId(null)
+    setPage(1)
+  }
+
+  function changeInviteFilter(next: string | null) {
+    setInviteId(next)
     setPage(1)
   }
 
@@ -156,6 +164,14 @@ export function AdminPhotosPage() {
         </div>
       </div>
 
+      <div className="album-toolbar">
+        <AlbumInviteFilter
+          value={inviteId}
+          onChange={changeInviteFilter}
+          adminStatusFilter={filter}
+        />
+      </div>
+
       {error && <p className="error">{error}</p>}
 
       {loading && photos.length === 0 && total === 0 && !error ? (
@@ -164,7 +180,9 @@ export function AdminPhotosPage() {
           <p>Loading photos…</p>
         </div>
       ) : total === 0 && !loading ? (
-        <p className="empty panel">No photos in this filter.</p>
+        <p className="empty panel">
+          {inviteId ? 'No photos from this guest in this filter.' : 'No photos in this filter.'}
+        </p>
       ) : (
         <>
           <AlbumPaginationControls

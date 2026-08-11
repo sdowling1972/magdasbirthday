@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate, RouterProvider, createBrowserRouter } from 'react-router-dom'
 import { GuestAuthProvider, useGuestAuth } from './GuestAuth'
-import { PublicLayout, AdminLayout } from './components/Layout'
+import { PublicLayout, AdminLayout, PublicAlbumLayout } from './components/Layout'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import { AdminInviteDetailPage } from './pages/AdminInviteDetailPage'
 import { AdminInvitesPage } from './pages/AdminInvitesPage'
@@ -45,6 +45,10 @@ const router = createBrowserRouter([
   { path: '/login', element: <GuestLoginPage /> },
   { path: '/autologin', element: <AutologinPage /> },
   { path: '/admin/login', element: <AdminLoginPage /> },
+  {
+    element: <PublicAlbumLayout />,
+    children: [{ path: '/photos', element: <AlbumPage guestChrome /> }],
+  },
   {
     element: <GuestRoutes />,
     children: [

@@ -5,15 +5,25 @@ import type { PageSize } from './useAlbumPagination'
 
 const ALL_PAGE_SIZE = 2000
 
-type AlbumSource = 'guest' | 'admin'
+type AlbumSource = 'public' | 'admin'
 
-export function usePagedAlbum(source: AlbumSource, defaultSize: PageSize = 15) {
+export function usePagedAlbum(
+  source: AlbumSource,
+  defaultSize: PageSize = 15,
+  inviteId: string | null = null,
+) {
   const [pageSize, setPageSize] = useState<PageSize>(defaultSize)
   const [page, setPage] = useState(1)
+  const [prevInviteId, setPrevInviteId] = useState(inviteId)
   const [photos, setPhotos] = useState<Photo[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  if (inviteId !== prevInviteId) {
+    setPrevInviteId(inviteId)
+    setPage(1)
+  }
 
   const requestSize = pageSize === 'all' ? ALL_PAGE_SIZE : pageSize
   const requestPage = pageSize === 'all' ? 1 : page
@@ -26,8 +36,8 @@ export function usePagedAlbum(source: AlbumSource, defaultSize: PageSize = 15) {
     let cancelled = false
     setLoading(true)
     setError('')
-    const fetchPage = source === 'guest' ? api.getAlbum : api.adminAlbum
-    fetchPage(requestPage, requestSize)
+    const fetchPage = source === 'public' ? api.getAlbum : api.adminAlbum
+    fetchPage(requestPage, requestSize, inviteId)
       .then((data) => {
         if (cancelled) return
         setPhotos(data.items)
@@ -48,7 +58,7 @@ export function usePagedAlbum(source: AlbumSource, defaultSize: PageSize = 15) {
     return () => {
       cancelled = true
     }
-  }, [source, requestPage, requestSize, pageSize])
+  }, [source, requestPage, requestSize, pageSize, inviteId])
 
   function changePageSize(next: PageSize) {
     setPageSize(next)

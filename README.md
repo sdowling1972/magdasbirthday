@@ -49,7 +49,8 @@ Open http://localhost:5173
 | Autologin | http://localhost:5173/autologin?key=AAAABBBBCCCCDDDD |
 | Home (after auth) | http://localhost:5173 |
 | Admin | http://localhost:5173/admin |
-| Public album | http://localhost:5173/album (requires invite code) |
+| Public album | http://localhost:5173/photos (no login required) |
+| Guest album | http://localhost:5173/album (requires invite code) |
 | Guest RSVP | http://localhost:5173/rsvp |
 
 Guests must enter their 16-letter invite code (shown as `AAAA-BBBB-CCCC-DDDD`) before browsing. Admin invite links use `/autologin?key=...`.

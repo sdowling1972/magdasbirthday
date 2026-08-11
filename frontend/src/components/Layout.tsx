@@ -2,6 +2,27 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api, clearToken } from '../api'
 import { useGuestAuth } from '../GuestAuth'
 
+export function PublicAlbumLayout() {
+  return (
+    <div className="site-shell guest-app">
+      <header className="site-header guest-header">
+        <Link to="/" className="brand">
+          Magda<span>'s</span> Big Birthday
+        </Link>
+        <nav className="nav-links guest-nav" aria-label="Public navigation">
+          <NavLink to="/photos">Album</NavLink>
+          <Link to="/login" className="guest-nav-signout">
+            Guest login
+          </Link>
+        </nav>
+      </header>
+      <main className="guest-main">
+        <Outlet />
+      </main>
+    </div>
+  )
+}
+
 export function PublicLayout() {
   const { logout } = useGuestAuth()
   const navigate = useNavigate()

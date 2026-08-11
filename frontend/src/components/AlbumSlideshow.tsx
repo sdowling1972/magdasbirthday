@@ -7,7 +7,8 @@ export type SlideshowDelay = 1 | 3 | 5 | 10
 const DELAY_OPTIONS: SlideshowDelay[] = [1, 3, 5, 10]
 
 type AlbumSlideshowProps = {
-  source: 'guest' | 'admin'
+  source: 'public' | 'admin'
+  inviteId?: string | null
   onClose: () => void
 }
 
@@ -38,7 +39,7 @@ function rotateToCurrent(photos: Photo[], currentId: string | undefined): Photo[
   return [...photos.slice(idx), ...photos.slice(0, idx)]
 }
 
-export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
+export function AlbumSlideshow({ source, inviteId = null, onClose }: AlbumSlideshowProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const orderedRef = useRef<Photo[]>([])
   const hideTimer = useRef<number | null>(null)
@@ -145,8 +146,8 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
     let cancelled = false
     setLoading(true)
     setError('')
-    const fetchPage = source === 'guest' ? api.getAlbum : api.adminAlbum
-    fetchPage(1, 2000)
+    const fetchPage = source === 'public' ? api.getAlbum : api.adminAlbum
+    fetchPage(1, 2000, inviteId)
       .then((data) => {
         if (cancelled) return
         orderedRef.current = data.items
@@ -171,7 +172,7 @@ export function AlbumSlideshow({ source, onClose }: AlbumSlideshowProps) {
     return () => {
       cancelled = true
     }
-  }, [source])
+  }, [source, inviteId])
 
   useEffect(() => {
     const el = rootRef.current

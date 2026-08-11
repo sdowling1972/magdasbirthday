@@ -1,4 +1,5 @@
 import type {
+  AlbumContributor,
   DashboardStats,
   Invite,
   InviteCreate,
@@ -204,20 +205,44 @@ export const api = {
   uploadPhoto: (form: FormData) =>
     request<Photo>('/api/photos/mine', { method: 'POST', body: form, invite: true }),
 
-  getAlbum: (page = 1, pageSize = 15) =>
-    request<PhotoPage>(`/api/photos/album?page=${page}&page_size=${pageSize}`, { invite: true }),
+  getAlbum: (page = 1, pageSize = 15, inviteId?: string | null) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    })
+    if (inviteId) params.set('invite_id', inviteId)
+    return request<PhotoPage>(`/api/photos/album?${params}`)
+  },
 
-  adminPhotos: (status?: PhotoStatus, page = 1, pageSize = 15) => {
+  getAlbumContributors: () => request<AlbumContributor[]>('/api/photos/album/contributors'),
+
+  adminContributors: (status?: PhotoStatus) => {
+    const params = new URLSearchParams()
+    if (status) params.set('status_filter', status)
+    const q = params.toString()
+    return request<AlbumContributor[]>(`/api/photos/admin/contributors${q ? `?${q}` : ''}`, {
+      admin: true,
+    })
+  },
+
+  adminPhotos: (status?: PhotoStatus, page = 1, pageSize = 15, inviteId?: string | null) => {
     const params = new URLSearchParams({
       page: String(page),
       page_size: String(pageSize),
     })
     if (status) params.set('status_filter', status)
+    if (inviteId) params.set('invite_id', inviteId)
     return request<PhotoPage>(`/api/photos/admin?${params}`, { admin: true })
   },
 
-  adminAlbum: (page = 1, pageSize = 15) =>
-    request<PhotoPage>(`/api/photos/admin/album?page=${page}&page_size=${pageSize}`, { admin: true }),
+  adminAlbum: (page = 1, pageSize = 15, inviteId?: string | null) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    })
+    if (inviteId) params.set('invite_id', inviteId)
+    return request<PhotoPage>(`/api/photos/admin/album?${params}`, { admin: true })
+  },
 
   updatePhoto: (
     id: string,

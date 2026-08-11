@@ -24,6 +24,9 @@ export function LandingPage() {
             <Link to="/login" className="landing-login-link">
               Have a login code? Login here!
             </Link>
+            <Link to="/photos" className="btn btn-blush">
+              View photo album
+            </Link>
           </div>
         </div>
         <div className="hero-portrait">

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { AlbumInviteFilter } from '../components/AlbumInviteFilter'
 import { AlbumPaginationControls } from '../components/AlbumPaginationControls'
 import { AlbumSlideshow } from '../components/AlbumSlideshow'
 import { PhotoLightbox } from '../components/PhotoLightbox'
@@ -23,7 +24,8 @@ function AlbumSkeletonGrid({ count }: { count: number }) {
 export function AdminAlbumPage() {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const [slideshowOpen, setSlideshowOpen] = useState(false)
-  const album = usePagedAlbum('admin', 15)
+  const [inviteId, setInviteId] = useState<string | null>(null)
+  const album = usePagedAlbum('admin', 15, inviteId)
   const skeletonCount = album.pageSize === 'all' ? 15 : album.pageSize
 
   function changePageSize(size: Parameters<typeof album.changePageSize>[0]) {
@@ -34,6 +36,11 @@ export function AdminAlbumPage() {
   function goToPage(page: number) {
     setActiveIndex(null)
     album.goToPage(page)
+  }
+
+  function changeInviteFilter(next: string | null) {
+    setActiveIndex(null)
+    setInviteId(next)
   }
 
   return (
@@ -64,12 +71,18 @@ export function AdminAlbumPage() {
         </div>
       </div>
 
+      <div className="album-toolbar">
+        <AlbumInviteFilter value={inviteId} onChange={changeInviteFilter} />
+      </div>
+
       {album.error && <p className="error">{album.error}</p>}
 
       {album.loading && album.photos.length === 0 && album.total === 0 && !album.error ? (
         <AlbumSkeletonGrid count={skeletonCount} />
       ) : album.total === 0 && !album.loading ? (
-        <p className="empty panel">No approved photos yet.</p>
+        <p className="empty panel">
+          {inviteId ? 'No approved photos from this guest yet.' : 'No approved photos yet.'}
+        </p>
       ) : (
         <>
           <AlbumPaginationControls
@@ -117,7 +130,11 @@ export function AdminAlbumPage() {
       )}
 
       {slideshowOpen && (
-        <AlbumSlideshow source="admin" onClose={() => setSlideshowOpen(false)} />
+        <AlbumSlideshow
+          source="admin"
+          inviteId={inviteId}
+          onClose={() => setSlideshowOpen(false)}
+        />
       )}
     </div>
   )

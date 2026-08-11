@@ -69,6 +69,7 @@ export interface Photo {
   status: PhotoStatus
   created_at: string
   url: string | null
+  household_name?: string | null
 }
 
 export interface PhotoPage {
@@ -76,6 +77,12 @@ export interface PhotoPage {
   total: number
   page: number
   page_size: number
+}
+
+export interface AlbumContributor {
+  invite_id: string
+  household_name: string
+  photo_count: number
 }
 
 export interface DashboardStats {

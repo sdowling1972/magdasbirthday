@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AlbumInviteFilter } from '../components/AlbumInviteFilter'
 import { AlbumPaginationControls } from '../components/AlbumPaginationControls'
 import { AlbumSlideshow } from '../components/AlbumSlideshow'
 import { PhotoLightbox } from '../components/PhotoLightbox'
@@ -19,11 +20,18 @@ function AlbumSkeletonGrid({ count, guest }: { count: number; guest?: boolean })
   )
 }
 
-export function AlbumPage() {
+type AlbumPageProps = {
+  /** When true, render inside the guest app chrome; public page uses its own layout. */
+  guestChrome?: boolean
+}
+
+export function AlbumPage({ guestChrome = true }: AlbumPageProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const [slideshowOpen, setSlideshowOpen] = useState(false)
-  const album = usePagedAlbum('guest', 15)
+  const [inviteId, setInviteId] = useState<string | null>(null)
+  const album = usePagedAlbum('public', 15, inviteId)
   const skeletonCount = album.pageSize === 'all' ? 15 : album.pageSize
+  const hasResults = album.total > 0 || album.loading
 
   function changePageSize(size: Parameters<typeof album.changePageSize>[0]) {
     setActiveIndex(null)
@@ -35,8 +43,13 @@ export function AlbumPage() {
     album.goToPage(page)
   }
 
+  function changeInviteFilter(next: string | null) {
+    setActiveIndex(null)
+    setInviteId(next)
+  }
+
   return (
-    <div className="section guest-page">
+    <div className={`section${guestChrome ? ' guest-page' : ''}`}>
       <div className="section-head album-section-head">
         <div>
           <h2>Photo album</h2>
@@ -56,12 +69,20 @@ export function AlbumPage() {
         )}
       </div>
 
+      <div className="album-toolbar">
+        <AlbumInviteFilter value={inviteId} onChange={changeInviteFilter} />
+      </div>
+
       {album.error && <p className="error">{album.error}</p>}
 
       {album.loading && album.photos.length === 0 && album.total === 0 && !album.error ? (
-        <AlbumSkeletonGrid count={skeletonCount} guest />
+        <AlbumSkeletonGrid count={skeletonCount} guest={guestChrome} />
       ) : album.total === 0 && !album.loading ? (
-        <p className="empty panel">No approved photos yet — check back soon.</p>
+        <p className="empty panel">
+          {inviteId
+            ? 'No approved photos from this guest yet.'
+            : 'No approved photos yet — check back soon.'}
+        </p>
       ) : (
         <>
           <AlbumPaginationControls
@@ -73,9 +94,9 @@ export function AlbumPage() {
             onPageChange={goToPage}
           />
           {album.loading ? (
-            <AlbumSkeletonGrid count={skeletonCount} guest />
+            <AlbumSkeletonGrid count={skeletonCount} guest={guestChrome} />
           ) : (
-            <div className="photo-grid guest-photo-grid">
+            <div className={`photo-grid${guestChrome ? ' guest-photo-grid' : ''}`}>
               {album.photos.map((p, i) => (
                 <PhotoTile
                   key={p.id}
@@ -86,14 +107,16 @@ export function AlbumPage() {
               ))}
             </div>
           )}
-          <AlbumPaginationControls
-            pageSize={album.pageSize}
-            page={album.page}
-            pageCount={album.pageCount}
-            total={album.total}
-            onPageSizeChange={changePageSize}
-            onPageChange={goToPage}
-          />
+          {hasResults && (
+            <AlbumPaginationControls
+              pageSize={album.pageSize}
+              page={album.page}
+              pageCount={album.pageCount}
+              total={album.total}
+              onPageSizeChange={changePageSize}
+              onPageChange={goToPage}
+            />
+          )}
         </>
       )}
 
@@ -109,7 +132,11 @@ export function AlbumPage() {
       )}
 
       {slideshowOpen && (
-        <AlbumSlideshow source="guest" onClose={() => setSlideshowOpen(false)} />
+        <AlbumSlideshow
+          source="public"
+          inviteId={inviteId}
+          onClose={() => setSlideshowOpen(false)}
+        />
       )}
     </div>
   )

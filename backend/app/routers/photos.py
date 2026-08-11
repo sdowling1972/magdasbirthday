@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth import ALGORITHM, verify_admin_token
 from app.config import settings
@@ -16,7 +16,7 @@ from app.models import Invite, Photo, PhotoStatus
 from app.notifications import notify_photo_upload
 from app.notify_once import claim_notification
 from app.rate_limit import client_ip, limiter
-from app.schemas import PhotoAdminUpdate, PhotoOut, PhotoPage
+from app.schemas import AlbumContributor, PhotoAdminUpdate, PhotoOut, PhotoPage
 from app.services import get_invite_by_token
 from app.sessions import ADMIN_COOKIE
 from app.storage import get_storage
@@ -33,6 +33,9 @@ def photo_url(photo: Photo) -> str:
 
 
 def serialize_photo(photo: Photo) -> PhotoOut:
+    household = None
+    if getattr(photo, "invite", None) is not None:
+        household = photo.invite.household_name
     return PhotoOut(
         id=photo.id,
         invite_id=photo.invite_id,
@@ -44,6 +47,7 @@ def serialize_photo(photo: Photo) -> PhotoOut:
         status=photo.status,
         created_at=photo.created_at,
         url=photo_url(photo),
+        household_name=household,
     )
 
 
@@ -53,13 +57,19 @@ def paginate_photos(
     status_filter: PhotoStatus | None,
     page: int,
     page_size: int,
+    invite_id: UUID | None = None,
 ) -> PhotoPage:
-    filters = [Photo.status == status_filter] if status_filter is not None else []
+    filters: list = []
+    if status_filter is not None:
+        filters.append(Photo.status == status_filter)
+    if invite_id is not None:
+        filters.append(Photo.invite_id == invite_id)
     total = db.scalar(select(func.count()).select_from(Photo).where(*filters)) or 0
     page_count = max(1, (total + page_size - 1) // page_size) if total else 1
     safe_page = min(page, page_count)
     photos = db.scalars(
         select(Photo)
+        .options(selectinload(Photo.invite))
         .where(*filters)
         .order_by(Photo.created_at.desc())
         .offset((safe_page - 1) * page_size)
@@ -156,11 +166,46 @@ def list_invite_photos(
     return [serialize_photo(p) for p in photos]
 
 
+@router.get("/album/contributors", response_model=list[AlbumContributor])
+def album_contributors(
+    db: Session = Depends(get_db),
+) -> list[AlbumContributor]:
+    return list_contributors(db, status_filter=PhotoStatus.approved)
+
+
+def list_contributors(
+    db: Session,
+    *,
+    status_filter: PhotoStatus | None,
+) -> list[AlbumContributor]:
+    filters = [Photo.status == status_filter] if status_filter is not None else []
+    rows = db.execute(
+        select(Invite.id, Invite.household_name, func.count(Photo.id))
+        .join(Photo, Photo.invite_id == Invite.id)
+        .where(*filters)
+        .group_by(Invite.id, Invite.household_name)
+        .order_by(func.lower(Invite.household_name))
+    ).all()
+    return [
+        AlbumContributor(invite_id=row[0], household_name=row[1], photo_count=row[2])
+        for row in rows
+    ]
+
+
+@router.get("/admin/contributors", response_model=list[AlbumContributor])
+def admin_contributors(
+    status_filter: PhotoStatus | None = None,
+    _: str = Depends(verify_admin_token),
+    db: Session = Depends(get_db),
+) -> list[AlbumContributor]:
+    return list_contributors(db, status_filter=status_filter)
+
+
 @router.get("/album", response_model=PhotoPage)
 def public_album(
     page: int = Query(1, ge=1),
     page_size: int = Query(15, ge=1, le=2000),
-    _: Invite = Depends(require_invite_code),
+    invite_id: UUID | None = Query(None),
     db: Session = Depends(get_db),
 ) -> PhotoPage:
     return paginate_photos(
@@ -168,6 +213,7 @@ def public_album(
         status_filter=PhotoStatus.approved,
         page=page,
         page_size=page_size,
+        invite_id=invite_id,
     )
 
 
@@ -176,6 +222,7 @@ def admin_list_photos(
     status_filter: PhotoStatus | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(15, ge=1, le=2000),
+    invite_id: UUID | None = Query(None),
     _: str = Depends(verify_admin_token),
     db: Session = Depends(get_db),
 ) -> PhotoPage:
@@ -184,6 +231,7 @@ def admin_list_photos(
         status_filter=status_filter,
         page=page,
         page_size=page_size,
+        invite_id=invite_id,
     )
 
 
@@ -191,6 +239,7 @@ def admin_list_photos(
 def admin_album(
     page: int = Query(1, ge=1),
     page_size: int = Query(15, ge=1, le=2000),
+    invite_id: UUID | None = Query(None),
     _: str = Depends(verify_admin_token),
     db: Session = Depends(get_db),
 ) -> PhotoPage:
@@ -199,6 +248,7 @@ def admin_album(
         status_filter=PhotoStatus.approved,
         page=page,
         page_size=page_size,
+        invite_id=invite_id,
     )
 
 
@@ -256,6 +306,9 @@ def serve_file(
 
     if _is_admin(request, credentials):
         allowed = True
+    elif photo.status == PhotoStatus.approved:
+        # Approved album photos are publicly viewable.
+        allowed = True
     else:
         code = resolve_invite_code(request)
         if not code:
@@ -263,8 +316,8 @@ def serve_file(
         invite = get_invite_by_token(db, code)
         if not invite:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-        # Guests may view approved album photos, or any photo from their own invite
-        allowed = photo.status == PhotoStatus.approved or photo.invite_id == invite.id
+        # Guests may view any photo from their own invite (including pending).
+        allowed = photo.invite_id == invite.id
 
     if not allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
@@ -273,8 +326,9 @@ def serve_file(
     if not opened:
         raise HTTPException(status_code=404, detail="File not found")
     data, content_type = opened
+    cache = "public, max-age=3600" if photo.status == PhotoStatus.approved else "private, max-age=3600"
     return Response(
         content=data,
         media_type=photo.content_type or content_type,
-        headers={"Cache-Control": "private, max-age=3600"},
+        headers={"Cache-Control": cache},
     )

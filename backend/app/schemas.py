@@ -123,6 +123,7 @@ class PhotoOut(BaseModel):
     status: PhotoStatus
     created_at: datetime
     url: str | None = None
+    household_name: str | None = None
 
 
 class PhotoPage(BaseModel):
@@ -130,6 +131,12 @@ class PhotoPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class AlbumContributor(BaseModel):
+    invite_id: UUID
+    household_name: str
+    photo_count: int
 
 
 class PhotoAdminUpdate(BaseModel):
